@@ -65,23 +65,20 @@ async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
 }
 
 /**
- * Preenche o modal de Adicionar Pessoa (Formulário 2) via injeção DOM e sincronização de eventos
+ * Preenche o modal de Adicionar Pessoa (Formulário 2)
  */
 async function preencherModalPessoa(page, pessoa) {
     try {
         console.log(`\nAbrindo modal para pessoa: [${pessoa.tipo} - ${pessoa.nome}]...`);
 
-        // 1. Clica no botão "+ Pessoa"
         const btnAddPessoa = page.locator('button[data-target="#modalPessoa"], button:has(.fa-plus):has-text("Pessoa")').first();
         await btnAddPessoa.waitFor({ state: 'visible', timeout: 8000 });
         await btnAddPessoa.click();
 
-        // 2. Aguarda a abertura do modal
         const modalPessoa = page.locator('#modalPessoa');
         await modalPessoa.waitFor({ state: 'visible', timeout: 8000 });
         await page.waitForTimeout(500);
 
-        // 3. Seleciona o tipo no dropdown ("Pessoas Envolvidas")
         const selectTipo = page.locator('#modalPessoa select').first();
         await selectTipo.waitFor({ state: 'visible', timeout: 5000 });
 
@@ -103,7 +100,6 @@ async function preencherModalPessoa(page, pessoa) {
         await selectTipo.dispatchEvent('input');
         await page.waitForTimeout(300);
 
-        // 4. Preenche CPF (se houver)
         if (pessoa.cpf) {
             console.log(`Preenchendo CPF: ${pessoa.cpf}...`);
             const inputCPF = page.locator('#modalPessoa input[name="cpf"], #modalPessoa #cpf').first();
@@ -113,7 +109,6 @@ async function preencherModalPessoa(page, pessoa) {
             await page.waitForTimeout(1000);
         }
 
-        // 5. Preenche Nome Completo
         if (pessoa.nome) {
             console.log(`Preenchendo Nome: "${pessoa.nome}"...`);
             const inputNome = page.locator('#modalPessoa input[name="nome"]').first();
@@ -125,7 +120,6 @@ async function preencherModalPessoa(page, pessoa) {
             await inputNome.dispatchEvent('change');
         }
 
-        // 6. Preenche Sexo (1 = Masculino, 2 = Feminino)
         if (pessoa.sexo) {
             console.log(`Selecionando Sexo: ${pessoa.sexo}...`);
             const selectSexo = page.locator('#modalPessoa select[name="sexo"]').first();
@@ -135,7 +129,6 @@ async function preencherModalPessoa(page, pessoa) {
             await selectSexo.dispatchEvent('input');
         }
 
-        // 7. Preenche Data de Nascimento (04/12/1997 -> 1997-12-04 para input date)
         if (pessoa.nascimento) {
             console.log(`Preenchendo Data de Nascimento: ${pessoa.nascimento}...`);
             const selectorNasc = '#modalPessoa input[name="nascimento"]';
@@ -160,7 +153,6 @@ async function preencherModalPessoa(page, pessoa) {
             }, { selector: selectorNasc, valIso: dataIso, valBr: pessoa.nascimento });
         }
 
-        // 8. Preenche Nome da Mãe
         if (pessoa.mae) {
             console.log(`Preenchendo Nome da Mãe: "${pessoa.mae}"...`);
             const selectorMae = '#modalPessoa input[name="mae"]';
@@ -176,13 +168,11 @@ async function preencherModalPessoa(page, pessoa) {
             }, { selector: selectorMae, val: pessoa.mae });
         }
 
-        // 9. Morte (padrão: NÃO)
         const selectMorte = page.locator('#modalPessoa select[name="morte"], #modalPessoa select').last();
         await selectMorte.selectOption({ label: pessoa.morte || 'NÃO' }).catch(() => { });
 
         await page.waitForTimeout(600);
 
-        // 10. Confirma a inclusão
         console.log('Confirmando inclusão da pessoa...');
         const btnAdicionar = page.locator('#modalPessoa button:has-text("Adicionar")').first();
         await btnAdicionar.click();
@@ -194,8 +184,9 @@ async function preencherModalPessoa(page, pessoa) {
         await page.keyboard.press('Escape').catch(() => { });
     }
 }
+
 /**
- * Executa o fluxo de Pessoas na tela de detalhes
+ * Executa a etapa de Pessoas na tela de detalhes
  */
 async function executarFormulario2(page, dados) {
     console.log('\nVerificando a tela "Detalhando a ocorrência"...');
@@ -217,65 +208,191 @@ async function executarFormulario2(page, dados) {
 }
 
 /**
- * Preenche o modal de Procedimento (Formulário 3)
+ * Preenche o modal de Procedimento Policial
  */
-async function preencherModalProcedimento(page, procedimentoData) {
+async function preencherModalProcedimento(page, procedimento) {
     try {
-        console.log('\nIniciando preenchimento da aba Procedimentos...');
+        console.log('\nIniciando fluxo de Procedimentos...');
 
-        const abaProcedimentos = page.locator('text="Procedimentos"').first();
-        if (await abaProcedimentos.isVisible().catch(() => false)) {
-            await abaProcedimentos.click();
-            await page.waitForTimeout(500);
-        }
-
-        const btnAddProcedimento = page.locator('button[data-target="#modalProcedimento"]').first();
-        await btnAddProcedimento.waitFor({ state: 'visible', timeout: 8000 });
-        await btnAddProcedimento.click();
+        console.log('1. Clicando na aba Procedimentos...');
+        const abaProcedimentos = page.locator('#procedimentos-tab, a[href="#procedimentos"]').first();
+        await abaProcedimentos.waitFor({ state: 'visible', timeout: 8000 });
+        await abaProcedimentos.click();
         await page.waitForTimeout(600);
 
-        if (procedimentoData.procedimento) {
-            console.log(`Selecionando Procedimento: "${procedimentoData.procedimento}"...`);
-            const selectProc = page.locator('#modalProcedimento select').nth(0);
-            await selectProc.selectOption({ label: procedimentoData.procedimento }).catch(async () => {
-                await selectProc.selectOption({ index: 3 });
-            });
-        }
+        console.log('2. Clicando no botão para abrir modal Procedimento...');
+        const btnAbrirModal = page.locator('button[data-target="#modalProcedimento"]').first();
+        await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
+        await btnAbrirModal.click();
 
-        const selectReparticao = page.locator('#modalProcedimento select').nth(1);
-        if (await selectReparticao.isVisible().catch(() => false)) {
-            await selectReparticao.selectOption({ index: 1 }).catch(() => { });
-        }
+        const modalProcedimento = page.locator('#modalProcedimento');
+        await modalProcedimento.waitFor({ state: 'visible', timeout: 8000 });
+        await page.waitForTimeout(500);
 
-        if (procedimentoData.delegacia) {
-            await selecionarSelect2(page, 'Delegacia', procedimentoData.delegacia, procedimentoData.delegacia);
-        }
+        console.log('3. Selecionando Repartição de Registro: "Polícia Civil"...');
+        const selectorReparticao = '#modalProcedimento select#reparticao, #modalProcedimento select[name="reparticao"]';
 
-        if (procedimentoData.delegado) {
-            await selecionarSelect2(page, 'Delegado', procedimentoData.delegado, procedimentoData.delegado);
-        }
+        await page.waitForSelector(selectorReparticao, { state: 'attached', timeout: 8000 });
 
-        if (procedimentoData.numero) {
-            console.log(`Preenchendo Número: ${procedimentoData.numero}...`);
-            const inputNumero = page.locator('#modalProcedimento input[placeholder*="Número"], #modalProcedimento input').first();
-            await inputNumero.fill(procedimentoData.numero).catch(() => { });
-        }
-
-        if (procedimentoData.ano) {
-            console.log(`Preenchendo Ano: ${procedimentoData.ano}...`);
-            const inputAno = page.locator('#modalProcedimento input[placeholder*="Ano"]').first();
-            if (await inputAno.isVisible().catch(() => false)) {
-                await inputAno.fill(procedimentoData.ano).catch(() => { });
+        await page.evaluate((sel) => {
+            const select = document.querySelector(sel);
+            if (select) {
+                select.value = '2'; // 2 = Polícia Civil
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input', { bubbles: true }));
             }
+        }, selectorReparticao);
+
+        await page.waitForTimeout(800);
+
+        if (procedimento.procedimento) {
+            console.log(`4. Selecionando Procedimento: "${procedimento.procedimento}"...`);
+            const selectProc = page.locator('#modalProcedimento select[name="procedimento"], #modalProcedimento #procedimento').first();
+            await selectProc.selectOption({ label: procedimento.procedimento }, { force: true }).catch(async () => {
+                await selectProc.selectOption({ index: 1 }, { force: true });
+            });
+            await selectProc.dispatchEvent('change');
+            await page.waitForTimeout(400);
         }
 
-        console.log('----------------------------------------------------');
-        console.log('PROCEDIMENTO PREENCHIDO COM SUCESSO!');
-        console.log('Confira os dados e clique no botão verde "Atualizar".');
-        console.log('----------------------------------------------------');
+        const termoDelegacia = procedimento.codigoDelegacia || procedimento.delegaciaTexto || '110';
+        console.log(`5. Buscando Delegacia pelo código/termo: "${termoDelegacia}"...`);
+        const comboDelegacia = page.locator('#modalProcedimento [id*="procedimento_delegacia"]').first();
+        await comboDelegacia.click({ force: true });
+        await page.waitForTimeout(300);
 
+        const searchInputDelegacia = page.locator('.select2-container--open input.select2-search__field').first();
+        await searchInputDelegacia.fill(termoDelegacia);
+        await page.waitForTimeout(800);
+
+        const opcaoDelegacia = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
+        if (await opcaoDelegacia.isVisible()) {
+            await opcaoDelegacia.click();
+        } else {
+            await page.keyboard.press('Enter');
+        }
+        await page.waitForTimeout(400);
+
+        if (procedimento.delegado) {
+            console.log(`6. Buscando Delegado: "${procedimento.delegado}"...`);
+            const comboDelegado = page.locator('#modalProcedimento [id*="procedimento_delegado"]').first();
+            await comboDelegado.click({ force: true });
+            await page.waitForTimeout(300);
+
+            const searchInputDelegado = page.locator('.select2-container--open input.select2-search__field').first();
+            await searchInputDelegado.fill(procedimento.delegado);
+            await page.waitForTimeout(800);
+
+            const opcaoDelegado = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
+            if (await opcaoDelegado.isVisible()) {
+                await opcaoDelegado.click();
+            } else {
+                await page.keyboard.press('Enter');
+            }
+            await page.waitForTimeout(400);
+        }
+
+        if (procedimento.numero) {
+            console.log(`7. Preenchendo Número do B.O.: ${procedimento.numero}...`);
+            const inputNumero = page.locator('#modalProcedimento input[name="procedimento_numero"]').first();
+            await inputNumero.focus();
+            await inputNumero.fill('');
+            await inputNumero.fill(procedimento.numero);
+            await inputNumero.dispatchEvent('input');
+            await inputNumero.dispatchEvent('change');
+        }
+
+        if (procedimento.ano) {
+            console.log(`8. Preenchendo Ano: ${procedimento.ano}...`);
+            const inputAno = page.locator('#modalProcedimento input[name="procedimento_ano"]').first();
+            await inputAno.focus();
+            await inputAno.fill('');
+            await inputAno.fill(procedimento.ano);
+            await inputAno.dispatchEvent('input');
+            await inputAno.dispatchEvent('change');
+        }
+
+        console.log('✅ Modal Procedimento preenchido com sucesso!');
     } catch (error) {
-        console.warn('⚠️ Falha ao preencher o procedimento:', error.message);
+        console.warn('⚠️ Falha ao preencher Modal Procedimento:', error.message);
+    }
+}
+
+/**
+ * Preenche o modal de Histórico e força a gravação via API do Summernote e submissão DOM
+ */
+async function preencherModalHistorico(page, textoHistorico) {
+    try {
+        if (!textoHistorico) {
+            console.warn('⚠️ Nenhum texto de histórico fornecido para preenchimento.');
+            return;
+        }
+
+        console.log('\nIniciando fluxo de preenchimento do Histórico...');
+
+        // 1. Clica na aba "Histórico" (#historicos-tab)
+        console.log('1. Clicando na aba Histórico...');
+        const abaHistorico = page.locator('#historicos-tab, a[href="#historicos"]').first();
+        await abaHistorico.waitFor({ state: 'visible', timeout: 8000 });
+        await abaHistorico.click();
+        await page.waitForTimeout(600);
+
+        // 2. Clica no botão para abrir o modal de Histórico
+        console.log('2. Clicando no botão para abrir o modal de Histórico...');
+        const btnAbrirModal = page.locator('#btnHistoricoModal, button[data-target="#modalHistorico"]').first();
+        await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
+        await btnAbrirModal.click();
+
+        // 3. Aguarda o modal ficar visível
+        const modalHistorico = page.locator('#modalHistorico');
+        await modalHistorico.waitFor({ state: 'visible', timeout: 8000 });
+        await page.waitForTimeout(500);
+
+        // 4. Injeta e sincroniza o texto no Summernote / Textarea
+        console.log('3. Inserindo o texto no editor do Histórico...');
+        await page.evaluate((texto) => {
+            // Tenta a API nativa do Summernote (padrão do SIPOM)
+            if (window.$ && $('#modalHistorico textarea').length) {
+                try {
+                    $('#modalHistorico textarea').summernote('code', texto);
+                } catch (e) {
+                    console.warn('Falha na API Summernote, usando fallback DOM');
+                }
+            }
+
+            // Fallback visual no elemento editable
+            const editable = document.querySelector('#modalHistorico .note-editable, #modalHistorico [contenteditable="true"]');
+            if (editable) {
+                editable.innerHTML = texto;
+            }
+
+            // Fallback no textarea original do formulário
+            const textarea = document.querySelector('#modalHistorico textarea');
+            if (textarea) {
+                textarea.value = texto;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }, textoHistorico);
+
+        await page.waitForTimeout(800);
+
+        // 5. Executa a submissão do formulário e clique no botão diretamente pelo navegador
+        console.log('4. Confirmando gravação do Histórico...');
+        await page.evaluate(() => {
+            const btnSalvar = document.querySelector('#btn-salvar-historico') || document.querySelector('#modalHistorico input[type="submit"]');
+            if (btnSalvar) {
+                btnSalvar.click();
+            } else {
+                const form = document.querySelector('#modalHistorico form');
+                if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
+            }
+        });
+
+        await page.waitForTimeout(1500);
+        console.log('✅ Histórico gravado e salvo com sucesso!');
+    } catch (error) {
+        console.warn('⚠️ Falha ao preencher o Histórico:', error.message);
     }
 }
 
@@ -336,7 +453,6 @@ async function executarOcorrenciaCompleta(page, dados) {
     console.log('Aguardando a confirmação manual para ir à tela de detalhes...');
     console.log('----------------------------------------------------');
 
-    // Validação ativa para detectar a entrada na tela de detalhes
     let telaDetalhesDetectada = false;
     while (!telaDetalhesDetectada) {
         await page.waitForTimeout(1000);
@@ -357,6 +473,10 @@ async function executarOcorrenciaCompleta(page, dados) {
 
     if (dados.procedimento) {
         await preencherModalProcedimento(page, dados.procedimento);
+    }
+
+    if (dados.historico) {
+        await preencherModalHistorico(page, dados.historico);
     }
 }
 
@@ -396,10 +516,11 @@ async function executarOcorrenciaCompleta(page, dados) {
 
         console.log('\n====================================================');
         console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
-        console.log('1. Criar Ocorrência Completa (Formulário 1 + Pessoas + Procedimento)');
+        console.log('1. Criar Ocorrência Completa (Formulário 1 + Pessoas + Procedimento + Histórico)');
         console.log('2. Preencher apenas Pessoas na ocorrência atual');
         console.log('3. Preencher apenas Procedimento na ocorrência atual');
-        console.log('4. Sair');
+        console.log('4. Preencher apenas Histórico na ocorrência atual');
+        console.log('5. Sair');
         console.log('====================================================');
 
         const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
@@ -410,7 +531,9 @@ async function executarOcorrenciaCompleta(page, dados) {
             await executarFormulario2(page, dados);
         } else if (opcao.trim() === '3') {
             await preencherModalProcedimento(page, dados.procedimento);
-        } else if (opcao.trim() === '4' || opcao.trim().toLowerCase() === 'sair') {
+        } else if (opcao.trim() === '4') {
+            await preencherModalHistorico(page, dados.historico);
+        } else if (opcao.trim() === '5' || opcao.trim().toLowerCase() === 'sair') {
             continuar = false;
             console.log('Encerrando o robô...');
             await context.close();

@@ -357,6 +357,18 @@ function extrairProcedimento(textoLimpo) {
     };
 }
 
+/**
+ * Extrai o texto do Histórico
+ */
+function extrairHistorico(textoLimpo) {
+    const textoSanitizado = textoLimpo
+        .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
+        .replace(/\*/g, '');
+
+    const match = textoSanitizado.match(/(?:Hist[óo]rico|Relato):\s*([\s\S]*)/i);
+    return match ? match[1].trim() : '';
+}
+
 function extrairDadosFormulario1(textoRelatorio) {
     if (!textoRelatorio || typeof textoRelatorio !== 'string') {
         throw new Error('O texto do relatório fornecido é inválido.');
@@ -416,8 +428,14 @@ function extrairDadosFormulario1(textoRelatorio) {
         cidadeFallback: 'Fortaleza',
         numeroOcorrencia: numOcorrenciaMatch ? numOcorrenciaMatch[1].trim() : '',
         pessoas: extrairPessoas(textoLimpo),
-        procedimento: extrairProcedimento(textoLimpo)
+        procedimento: extrairProcedimento(textoLimpo),
+        historico: extrairHistorico(textoLimpo)
     };
 }
 
-module.exports = { extrairDadosFormulario1 };
+module.exports = {
+    extrairDadosFormulario1,
+    extrairPessoas,
+    extrairProcedimento,
+    extrairHistorico
+};
