@@ -1,2 +1,3 @@
-2026/08/15-13:03:43.589 5cd8 Creating DB C:\Users\miche\OneDrive\Área de Trabalho\Robo SIPOM\perfil-robo-chrome\Default\Local Storage\leveldb since it was missing.
-2026/08/15-13:03:43.767 5cd8 Reusing MANIFEST C:\Users\miche\OneDrive\Área de Trabalho\Robo SIPOM\perfil-robo-chrome\Default\Local Storage\leveldb/MANIFEST-000001
+2026/08/15-17:45:07.133 22b4 Reusing MANIFEST C:\Users\miche\OneDrive\Área de Trabalho\Robo SIPOM\perfil-robo-chrome\Default\Local Storage\leveldb/MANIFEST-000001
+2026/08/15-17:45:07.152 22b4 Recovering log #3
+2026/08/15-17:45:07.157 22b4 Reusing old log C:\Users\miche\OneDrive\Área de Trabalho\Robo SIPOM\perfil-robo-chrome\Default\Local Storage\leveldb/000003.log 

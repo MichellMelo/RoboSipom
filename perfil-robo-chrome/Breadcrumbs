@@ -1,5 +1,25 @@
+0:00:30 Memory Pressure: Moderate
+0:00:40 Memory Pressure: Moderate
+0:00:50 Memory Pressure: Moderate
+0:01:00 Memory Pressure: Moderate
+0:01:10 Memory Pressure: Moderate
+0:01:15 Memory Pressure: None
+0:01:47 DevTools_Close
+0:02:00 Widget Closed: StatusBubble
+0:02:33 Widget Closed:
+0:02:35 Widget Closed:
+0:02:49 DevTools_ToggleWindow
+0:02:49 DevTools_InspectRenderer
+0:02:49 DevTools_PanelShown_elements
+0:02:53 Widget Closed: StatusBubble
+0:03:10 Memory Pressure: Moderate
+0:03:15 Memory Pressure: None
+0:03:26 Widget Closed:
+0:03:26 Widget Closed:
+0:05:15 DevTools_Close
+0:05:47 Widget Closed: StatusBubble
+0:07:25 Browser1 Close Tab1 at 0
 0:00:00 Startup
-0:00:00 UserEducation.Session.ActivePeriodStart
 0:00:00 Tab1 StartNav3 #auto_toplevel
 0:00:00 Browser1 Insert active Tab1 at 0
 0:00:00 Tab1 AddInfobar43
@@ -7,38 +27,41 @@
 0:00:00 Tab1 FinishNav3
 0:00:00 Tab1 PageLoad
 0:00:00 Tab1 StartNav4 #typed
-0:00:01 Tab1 FinishNav4
-0:00:06 Tab1 PageLoad
-0:00:21 Autofill_ParsedOtpForm
-0:00:30 Tab1 StartNav5 #renderer-user #link
-0:00:31 Tab1 FinishNav5
-0:00:32 PasswordManager_LoginPassed
-0:00:32 Tab1 PageLoad
-0:00:35 Widget Closed: PasswordSaveUpdateView
-0:00:47 Tab1 StartNav6 #typed
-0:00:49 Tab1 FinishNav6
-0:00:51 Widget Closed: StatusBubble
-0:00:52 Tab1 PageLoad
-0:01:05 Widget Closed: StatusBubble
-0:01:23 Widget Closed: StatusBubble
-0:01:33 Tab1 StartNav7 #typed
-0:01:34 Tab1 FinishNav7
-0:01:34 Tab1 PageLoad
-0:01:36 Tab1 StartNav8 #renderer-script #auto_subframe
-0:01:36 Tab1 FinishNav8
-0:01:36 Tab1 PageLoad
-0:03:51 Autofill_OnWillSubmitForm
-0:03:51 Tab1 StartNav9 #renderer-user #link
-0:03:53 Tab1 FinishNav9
-0:03:58 Tab1 PageLoad
-0:04:17 Widget Closed: StatusBubble
-0:30:31 ScreenlockMonitor_ScreenLocked
-0:30:31 ScreenlockMonitor_ScreenLocked
-0:47:17 ScreenlockMonitor_ScreenUnlocked
-0:47:17 ScreenlockMonitor_ScreenUnlocked
-0:58:38 Tab1 RemoveInfobar43
-0:58:38 Widget Closed: StatusBubble
-0:59:05 Widget Closed: StatusBubble
-1:01:39 Widget Closed: StatusBubble
-1:01:57 Widget Closed: StatusBubble
-1:03:37 Browser1 Close Tab1 at 0
+0:00:02 Tab1 FinishNav4
+0:00:04 Tab1 PageLoad
+0:00:34 Widget Closed: StatusBubble
+0:02:03 Widget Closed: StatusBubble
+0:02:46 Widget Closed: StatusBubble
+0:03:30 Widget Closed: StatusBubble
+0:03:56 Widget Closed: StatusBubble
+0:04:08 Widget Closed: StatusBubble
+0:06:10 Widget Closed: StatusBubble
+0:08:32 Widget Closed: StatusBubble
+0:09:54 Browser1 Close Tab1 at 0
+0:00:00 Startup
+0:00:00 Tab1 StartNav3 #auto_toplevel
+0:00:00 Browser1 Insert active Tab1 at 0
+0:00:00 Tab1 AddInfobar43
+0:00:00 TouchMode.EnteredNonTouchMode
+0:00:00 Tab1 FinishNav3
+0:00:00 Tab1 PageLoad
+0:00:00 Tab1 StartNav4 #typed
+0:00:02 Tab1 FinishNav4
+0:00:04 Tab1 PageLoad
+0:00:18 Widget Closed: StatusBubble
+0:00:33 Browser1 Close Tab1 at 0
+0:00:00 Startup
+0:00:00 Tab1 StartNav3 #auto_toplevel
+0:00:00 Browser1 Insert active Tab1 at 0
+0:00:00 Tab1 AddInfobar43
+0:00:00 TouchMode.EnteredNonTouchMode
+0:00:00 Tab1 FinishNav3
+0:00:00 Tab1 PageLoad
+0:00:00 Tab1 StartNav4 #typed
+0:00:02 Tab1 FinishNav4
+0:00:03 Tab1 PageLoad
+0:00:06 Tab1 StartNav5 #renderer-user #link
+0:00:06 Tab1 FinishNav5
+0:00:21 Widget Closed: StatusBubble
+0:00:38 Widget Closed: StatusBubble
+0:03:13 Browser1 Close Tab1 at 0
