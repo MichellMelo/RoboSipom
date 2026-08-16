@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 const { chromium } = require('playwright');
 const fs = require('fs');
 const path = require('path');
@@ -909,7 +910,8 @@ async function executarOcorrenciaCompleta(page, dados) {
 }
 
 (async () => {
-    const userDataDir = path.join(__dirname, 'perfil-robo-chrome');
+    const PASTA_PROJETO = __dirname;
+    const userDataDir = path.join(PASTA_PROJETO, 'perfil-robo-chrome');
 
     console.log('Iniciando Google Chrome com perfil exclusivo...');
 
