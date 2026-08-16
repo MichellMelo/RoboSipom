@@ -511,30 +511,74 @@ async function preencherModalMaterial(page, dadosMaterial) {
 }
 
 /**
- * Acessa a aba Composições e abre o modal de composição (#modalComposicao)
+ * Acessa a aba Composições, abre o modal e seleciona o Tipo de Policiamento em select[name="policiamento_tipo"]
  */
 async function preencherModalComposicao(page, dadosComposicao) {
     try {
         console.log('\nIniciando fluxo de preenchimento de Composições...');
 
+        // 1. Clica na aba "Composições" (#composicoes-tab)
         console.log('1. Clicando na aba Composições...');
         const abaComposicoes = page.locator('#composicoes-tab, a[href="#composicoes"]').first();
         await abaComposicoes.waitFor({ state: 'visible', timeout: 8000 });
         await abaComposicoes.click();
         await page.waitForTimeout(600);
 
+        // 2. Clica no botão para abrir o modal (#modalComposicao)
         console.log('2. Clicando no botão para abrir o modal Composição...');
         const btnAbrirModal = page.locator('button[data-target="#modalComposicao"]').first();
         await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
         await btnAbrirModal.click();
 
+        // 3. Aguarda a abertura do modal
         const modalComposicao = page.locator('#modalComposicao');
         await modalComposicao.waitFor({ state: 'visible', timeout: 8000 });
         await page.waitForTimeout(500);
 
-        console.log('✅ Modal de Composição aberto com sucesso!');
+        // 4. Seleciona o Tipo de Policiamento no select[name="policiamento_tipo"]
+        const tipoProcurado = dadosComposicao?.tipoPoliciamento || 'Motorizado';
+        console.log(`3. Selecionando Tipo de Policiamento: "${tipoProcurado}"...`);
+
+        const selectorPoliciamento = '#modalComposicao select[name="policiamento_tipo"], select[name="policiamento_tipo"]';
+        await page.waitForSelector(selectorPoliciamento, { state: 'attached', timeout: 8000 });
+
+        // Seleção no DOM varrendo o texto das opções visíveis
+        const selecaoSucesso = await page.evaluate(({ selector, labelProcurado }) => {
+            const select = document.querySelector(selector);
+            if (!select) return false;
+
+            const options = Array.from(select.options);
+            const optCorrespondente = options.find(o =>
+                o.text.trim().toLowerCase() === labelProcurado.toLowerCase()
+            );
+
+            if (optCorrespondente) {
+                select.value = optCorrespondente.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input', { bubbles: true }));
+                return true;
+            }
+            return false;
+        }, { selector: selectorPoliciamento, labelProcurado: tipoProcurado });
+
+        if (!selecaoSucesso) {
+            console.warn(`⚠️ Tipo de Policiamento "${tipoProcurado}" não encontrado. Selecionando "Motorizado" por padrão...`);
+            await page.evaluate((selector) => {
+                const select = document.querySelector(selector);
+                if (select) {
+                    const optDefault = Array.from(select.options).find(o => o.text.toLowerCase().includes('motorizado'));
+                    if (optDefault) {
+                        select.value = optDefault.value;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }, selectorPoliciamento);
+        }
+
+        await page.waitForTimeout(800);
+        console.log(`✅ Tipo de Policiamento ("${tipoProcurado}") selecionado com sucesso!`);
     } catch (error) {
-        console.warn('⚠️ Falha ao abrir o modal de Composição:', error.message);
+        console.warn('⚠️ Falha ao preencher o modal de Composição:', error.message);
     }
 }
 

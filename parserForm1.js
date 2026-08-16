@@ -439,7 +439,7 @@ function extrairMaterial(textoLimpo) {
 }
 
 /**
- * Extrai dados da viatura/composição do relatório
+ * Extrai dados da viatura/composição e inferência do tipo de policiamento
  */
 function extrairComposicao(textoLimpo) {
     const textoSanitizado = textoLimpo.replace(/\*/g, '');
@@ -447,13 +447,34 @@ function extrairComposicao(textoLimpo) {
 
     let opm = '21°BPM';
     let viatura = '';
+    let tipoPoliciamento = 'Motorizado'; // Padrão se não encontrar
 
     if (match) {
         if (match[1]) opm = match[1].trim();
         if (match[2]) viatura = match[2].trim();
+
+        const textoUpper = (opm + ' ' + viatura).toUpperCase();
+
+        if (/MOTO|MOTOPATRULHAMENTO|RAIO/i.test(textoUpper)) {
+            tipoPoliciamento = 'Motopatrulhamento';
+        } else if (/VTR|VIATURA|MOTORIZADO|CARRO/i.test(textoUpper)) {
+            tipoPoliciamento = 'Motorizado';
+        } else if (/A PE|A PÉ|PEDESTRE/i.test(textoUpper)) {
+            tipoPoliciamento = 'A pé';
+        } else if (/INTELIG[EÊ]NCIA|SAI|P2/i.test(textoUpper)) {
+            tipoPoliciamento = 'Inteligência';
+        } else if (/CICLO|BICICLETA/i.test(textoUpper)) {
+            tipoPoliciamento = 'Ciclopatrulhamento';
+        } else if (/MONTADO|CAVALARIA/i.test(textoUpper)) {
+            tipoPoliciamento = 'Montado';
+        } else if (/A[ÉE]REO|HELIC[ÓO]PTERO|CIOPAER/i.test(textoUpper)) {
+            tipoPoliciamento = 'Aéreo';
+        } else if (/NA[ÚU]TICO|BARCO/i.test(textoUpper)) {
+            tipoPoliciamento = 'Naútico';
+        }
     }
 
-    return { opm, viatura };
+    return { opm, viatura, tipoPoliciamento };
 }
 
 /**
