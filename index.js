@@ -397,6 +397,125 @@ async function preencherModalHistorico(page, textoHistorico) {
 }
 
 /**
+ * Preenche o modal de Material tratando dinamicamente a seleção de Drogas
+ */
+/**
+ * Preenche o modal de Material tratando dinamicamente a seleção dos tipos
+ * (Arma, Munição, Droga, Veículo, Celular, Dinheiro, Outros)
+ */
+async function preencherModalMaterial(page, dadosMaterial) {
+    try {
+        if (!dadosMaterial || !dadosMaterial.possuiMaterial) {
+            console.log('\nℹ️ Relatório sem apreensão de materiais (S/A). Etapa de Materiais ignorada.');
+            return;
+        }
+
+        console.log('\nIniciando fluxo de preenchimento de Materiais...');
+
+        // 1. Clica na aba "Materiais" (#materiais-tab)
+        console.log('1. Clicando na aba Materiais...');
+        const abaMateriais = page.locator('#materiais-tab, a[href="#materiais"]').first();
+        await abaMateriais.waitFor({ state: 'visible', timeout: 8000 });
+        await abaMateriais.click();
+        await page.waitForTimeout(600);
+
+        // 2. Clica no botão "+ Material" para abrir o modal (#modalMaterial)
+        console.log('2. Clicando no botão para abrir modal Material...');
+        const btnAbrirModal = page.locator('button[data-target="#modalMaterial"]').first();
+        await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
+        await btnAbrirModal.click();
+
+        // 3. Aguarda a visibilidade do modal
+        const modalMaterial = page.locator('#modalMaterial');
+        await modalMaterial.waitFor({ state: 'visible', timeout: 8000 });
+        await page.waitForTimeout(500);
+
+        // 4. Seleciona o Tipo de Material no dropdown select[name="material_tipo"]
+        const tipoParaSelecionar = dadosMaterial.tipoLabel || 'Outros';
+        console.log(`3. Selecionando Tipo de Material: "${tipoParaSelecionar}"...`);
+
+        const selectorTipoMaterial = '#modalMaterial select[name="material_tipo"], select[name="material_tipo"]';
+        await page.waitForSelector(selectorTipoMaterial, { state: 'attached', timeout: 8000 });
+
+        // Seleção no DOM varrendo os textos das opções (Arma, Munição, Droga, Veículo, Celular, Dinheiro, Outros)
+        const selecaoSucesso = await page.evaluate(({ selector, labelProcurado }) => {
+            const select = document.querySelector(selector);
+            if (!select) return false;
+
+            const options = Array.from(select.options);
+            const optionCorrespondente = options.find(opt =>
+                opt.text.trim().toLowerCase() === labelProcurado.toLowerCase()
+            );
+
+            if (optionCorrespondente) {
+                select.value = optionCorrespondente.value;
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input', { bubbles: true }));
+                return true;
+            }
+            return false;
+        }, { selector: selectorTipoMaterial, labelProcurado: tipoParaSelecionar });
+
+        if (!selecaoSucesso) {
+            console.warn(`⚠️ Opção "${tipoParaSelecionar}" não encontrada. Selecionando fallback "Outros"...`);
+            await page.evaluate((selector) => {
+                const select = document.querySelector(selector);
+                if (select && select.options.length > 1) {
+                    select.selectedIndex = select.options.length - 1;
+                    select.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+            }, selectorTipoMaterial);
+        }
+
+        await page.waitForTimeout(800);
+
+        // 5. Fluxo condicional para DROGA
+        if (tipoParaSelecionar.toLowerCase() === 'droga') {
+            const subTipo = dadosMaterial.subTipoDroga || 'Maconha - gramas (g)';
+            const quantidade = dadosMaterial.quantidadeDroga || '1';
+
+            console.log(`3.1. Selecionando sub-tipo de Droga: "${subTipo}"...`);
+            await page.evaluate(({ subTipoTexto }) => {
+                const selects = Array.from(document.querySelectorAll('#modalMaterial select'));
+                const selectDroga = selects.find(s => s.name !== 'material_tipo');
+                if (selectDroga) {
+                    const opt = Array.from(selectDroga.options).find(o =>
+                        o.text.toLowerCase().includes(subTipoTexto.toLowerCase())
+                    );
+                    if (opt) {
+                        selectDroga.value = opt.value;
+                        selectDroga.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                }
+            }, { subTipoTexto: subTipo });
+
+            await page.waitForTimeout(400);
+
+            console.log(`3.2. Preenchendo a quantidade em gramas: ${quantidade}...`);
+            const inputQuantidade = page.locator('input[name="droga_quantidade"]').first();
+            await inputQuantidade.waitFor({ state: 'visible', timeout: 5000 });
+            await inputQuantidade.focus();
+            await inputQuantidade.fill('');
+            await inputQuantidade.fill(quantidade.toString());
+            await inputQuantidade.dispatchEvent('input');
+            await inputQuantidade.dispatchEvent('change');
+            await page.waitForTimeout(400);
+        }
+
+        // 6. Confirma a inclusão clicando no botão "Atualizar"
+        console.log('4. Confirmando gravação do Material...');
+        const btnSalvar = page.locator('#modalMaterial button:has-text("Atualizar"), #modalMaterial input[value="Atualizar"]').first();
+        await btnSalvar.waitFor({ state: 'visible', timeout: 5000 });
+        await btnSalvar.click({ force: true });
+
+        await page.waitForTimeout(1200);
+        console.log('✅ Material cadastrado com sucesso!');
+    } catch (error) {
+        console.warn('⚠️ Falha ao preencher o Material:', error.message);
+    }
+}
+
+/**
  * Executa o fluxo completo
  */
 async function executarOcorrenciaCompleta(page, dados) {
@@ -471,6 +590,14 @@ async function executarOcorrenciaCompleta(page, dados) {
 
     await executarFormulario2(page, dados);
 
+    //Novo
+    await preencherModalHistorico(page, dados.historico);
+
+    if (dados.material && dados.material.possuiMaterial) {
+        await preencherModalMaterial(page, dados.material);
+    }
+
+
     if (dados.procedimento) {
         await preencherModalProcedimento(page, dados.procedimento);
     }
@@ -516,11 +643,12 @@ async function executarOcorrenciaCompleta(page, dados) {
 
         console.log('\n====================================================');
         console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
-        console.log('1. Criar Ocorrência Completa (Formulário 1 + Pessoas + Procedimento + Histórico)');
+        console.log('1. Criar Ocorrência Completa (Formulário 1 + Pessoas + Procedimento + Histórico + Material)');
         console.log('2. Preencher apenas Pessoas na ocorrência atual');
         console.log('3. Preencher apenas Procedimento na ocorrência atual');
         console.log('4. Preencher apenas Histórico na ocorrência atual');
-        console.log('5. Sair');
+        console.log('5. Abrir apenas modal de Materiais na ocorrência atual');
+        console.log('6. Sair');
         console.log('====================================================');
 
         const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
@@ -533,13 +661,13 @@ async function executarOcorrenciaCompleta(page, dados) {
             await preencherModalProcedimento(page, dados.procedimento);
         } else if (opcao.trim() === '4') {
             await preencherModalHistorico(page, dados.historico);
-        } else if (opcao.trim() === '5' || opcao.trim().toLowerCase() === 'sair') {
+        } else if (opcao.trim() === '5') {
+            await preencherModalMaterial(page, dados.material);
+        } else if (opcao.trim() === '6' || opcao.trim().toLowerCase() === 'sair') {
             continuar = false;
             console.log('Encerrando o robô...');
             await context.close();
             break;
-        } else {
-            console.log('⚠️ Opção inválida. Tente novamente.');
         }
     }
 })();

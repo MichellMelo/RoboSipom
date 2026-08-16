@@ -369,6 +369,72 @@ function extrairHistorico(textoLimpo) {
     return match ? match[1].trim() : '';
 }
 
+/**
+ * Extrai e classifica o tipo de material e sub-campos específicos (como Drogas)
+ */
+function extrairMaterial(textoLimpo) {
+    const textoSanitizado = textoLimpo
+        .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
+        .replace(/\*/g, '');
+
+    const match = textoSanitizado.match(/Material\s*(?:apreendido\/recuperado)?:\s*([^\n]+)/i);
+
+    if (match) {
+        const descricao = match[1].trim();
+
+        if (/^(S\/A|N\/A|SEM MATERIAL|NENHUM|NADA)$/i.test(descricao)) {
+            return { possuiMaterial: false, tipoLabel: '', descricao: descricao };
+        }
+
+        let tipoLabel = 'Outros';
+        let subTipoDroga = '';
+        let quantidadeDroga = '1';
+
+        const descUpper = descricao.toUpperCase();
+
+        if (/DROGA|MACONHA|COCA[IÍ]NA|CRACK|SKANK|SKUNK|HAXIXE|ENTORPECENTE/i.test(descUpper)) {
+            tipoLabel = 'Droga';
+
+            // Identifica o subtipo específico da droga
+            if (/COCA[IÍ]NA/i.test(descUpper)) {
+                subTipoDroga = 'Cocaína - gramas (g)';
+            } else if (/CRACK/i.test(descUpper)) {
+                subTipoDroga = 'Crack - gramas (g)';
+            } else if (/SKANK|SKUNK/i.test(descUpper)) {
+                subTipoDroga = 'Skank - gramas (g)';
+            } else {
+                subTipoDroga = 'Maconha - gramas (g)'; // Padrão caso não especifique ou seja maconha
+            }
+
+            // Extrai a quantidade numérica (ex: 50g, 50 gramas, 100 g)
+            const qtdMatch = descUpper.match(/(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR)/i);
+            if (qtdMatch) {
+                quantidadeDroga = qtdMatch[1].replace(',', '.');
+            }
+        } else if (/REV[ÓO]LVER|PISTOLA|ESPINGARDA|ARMA|RIFLE|FUZIL|CARABINA|GARUCHA/i.test(descUpper)) {
+            tipoLabel = 'Arma';
+        } else if (/MUNI[ÇC][ÃA]O|CARTUCHO|PROJ[ÉE]TIL|MUNICOES/i.test(descUpper)) {
+            tipoLabel = 'Munição';
+        } else if (/CELULAR|TELEFONE|SMARTPHONE|IPHONE|SAMSUNG|MOTOROLA/i.test(descUpper)) {
+            tipoLabel = 'Celular';
+        } else if (/DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR/i.test(descUpper)) {
+            tipoLabel = 'Dinheiro';
+        } else if (/VE[IÍ]CULO|CARRO|MOTO|MOTOCICLETA|AUTOM[ÓO]VEL|CAMIONETA/i.test(descUpper)) {
+            tipoLabel = 'Veículo';
+        }
+
+        return {
+            possuiMaterial: true,
+            tipoLabel: tipoLabel,
+            subTipoDroga: subTipoDroga,
+            quantidadeDroga: quantidadeDroga,
+            descricao: descricao
+        };
+    }
+
+    return { possuiMaterial: false, tipoLabel: '', descricao: 'S/A' };
+}
+
 function extrairDadosFormulario1(textoRelatorio) {
     if (!textoRelatorio || typeof textoRelatorio !== 'string') {
         throw new Error('O texto do relatório fornecido é inválido.');
@@ -429,7 +495,8 @@ function extrairDadosFormulario1(textoRelatorio) {
         numeroOcorrencia: numOcorrenciaMatch ? numOcorrenciaMatch[1].trim() : '',
         pessoas: extrairPessoas(textoLimpo),
         procedimento: extrairProcedimento(textoLimpo),
-        historico: extrairHistorico(textoLimpo)
+        historico: extrairHistorico(textoLimpo),
+        material: extrairMaterial(textoLimpo)
     };
 }
 
@@ -437,5 +504,6 @@ module.exports = {
     extrairDadosFormulario1,
     extrairPessoas,
     extrairProcedimento,
-    extrairHistorico
+    extrairHistorico,
+    extrairMaterial,
 };
