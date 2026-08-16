@@ -439,42 +439,66 @@ function extrairMaterial(textoLimpo) {
 }
 
 /**
+ * Formata strings de matrícula diversas para o padrão oficial XXX.XXX-X-X
+ */
+function formatarMatricula(matriculaBruta) {
+    const apenasNum = matriculaBruta.replace(/\D/g, '');
+    if (apenasNum.length === 8) {
+        return `${apenasNum.slice(0, 3)}.${apenasNum.slice(3, 6)}-${apenasNum.slice(6, 7)}-${apenasNum.slice(7, 8)}`;
+    }
+    // Caso já venha com hífens/pontos
+    return matriculaBruta.replace(/\s+/g, '').trim();
+}
+
+/**
  * Extrai dados da viatura/composição e inferência do tipo de policiamento
  */
 function extrairComposicao(textoLimpo) {
     const textoSanitizado = textoLimpo.replace(/\*/g, '');
-    const match = textoSanitizado.match(/OPM\/VTR\/Composi[çc][ãa]o:\s*\n?\s*([^\n]+)\n?\s*([^\n]+)?/i);
 
-    let opm = '21°BPM';
-    let viatura = '';
-    let tipoPoliciamento = 'Motorizado'; // Padrão se não encontrar
+    // 1. Extração do Tipo de Policiamento
+    let tipoPoliciamento = 'Motorizado';
+    const matchVtr = textoSanitizado.match(/OPM\/VTR\/?:\s*([\s\S]*?)(?=\n\s*Composi[çc][ãa]o:|$)/i);
+    if (matchVtr) {
+        const textoVtr = matchVtr[1].toUpperCase();
+        if (/MOTO|RAIO/i.test(textoVtr)) tipoPoliciamento = 'Motopatrulhamento';
+        else if (/A PE|PEDESTRE/i.test(textoVtr)) tipoPoliciamento = 'A pé';
+        else if (/INTELIG[EÊ]NCIA|SAI/i.test(textoVtr)) tipoPoliciamento = 'Inteligência';
+    }
 
-    if (match) {
-        if (match[1]) opm = match[1].trim();
-        if (match[2]) viatura = match[2].trim();
+    // 2. Extração do Bloco de Composição (CMT, MOT, PAT)
+    const matchComposicao = textoSanitizado.match(/Composi[çc][ãa]o:\s*([\s\S]*?)(?=\n\s*(?:Qualifica[çc][ãa]o|Delegad[oa]|Material|Hist[óo]rico|$))/i);
+    const integrantes = [];
 
-        const textoUpper = (opm + ' ' + viatura).toUpperCase();
+    if (matchComposicao) {
+        const linhas = matchComposicao[1].split('\n');
 
-        if (/MOTO|MOTOPATRULHAMENTO|RAIO/i.test(textoUpper)) {
-            tipoPoliciamento = 'Motopatrulhamento';
-        } else if (/VTR|VIATURA|MOTORIZADO|CARRO/i.test(textoUpper)) {
-            tipoPoliciamento = 'Motorizado';
-        } else if (/A PE|A PÉ|PEDESTRE/i.test(textoUpper)) {
-            tipoPoliciamento = 'A pé';
-        } else if (/INTELIG[EÊ]NCIA|SAI|P2/i.test(textoUpper)) {
-            tipoPoliciamento = 'Inteligência';
-        } else if (/CICLO|BICICLETA/i.test(textoUpper)) {
-            tipoPoliciamento = 'Ciclopatrulhamento';
-        } else if (/MONTADO|CAVALARIA/i.test(textoUpper)) {
-            tipoPoliciamento = 'Montado';
-        } else if (/A[ÉE]REO|HELIC[ÓO]PTERO|CIOPAER/i.test(textoUpper)) {
-            tipoPoliciamento = 'Aéreo';
-        } else if (/NA[ÚU]TICO|BARCO/i.test(textoUpper)) {
-            tipoPoliciamento = 'Naútico';
+        for (let linha of linhas) {
+            const linhaLimpa = linha.trim();
+            if (!linhaLimpa) continue;
+
+            const matchLinha = linhaLimpa.match(/^(CMT|MOT|PAT)\s*:?\s*(.*?)(?:M\.?F\.?|Matr[íi]cula)?\s*:?\s*([\d\.\s-]+)$/i);
+
+            if (matchLinha) {
+                const sigla = matchLinha[1].toUpperCase();
+                const matriculaBruta = matchLinha[3].trim();
+
+                let funcaoLabel = 'Patrulheiro';
+                if (sigla === 'CMT') funcaoLabel = 'Comandante';
+                else if (sigla === 'MOT') funcaoLabel = 'Motorista';
+
+                integrantes.push({
+                    funcao: funcaoLabel,
+                    matricula: formatarMatricula(matriculaBruta)
+                });
+            }
         }
     }
 
-    return { opm, viatura, tipoPoliciamento };
+    return {
+        tipoPoliciamento,
+        integrantes
+    };
 }
 
 /**

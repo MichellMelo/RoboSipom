@@ -511,11 +511,17 @@ async function preencherModalMaterial(page, dadosMaterial) {
 }
 
 /**
- * Acessa a aba Composições, abre o modal e seleciona o Tipo de Policiamento em select[name="policiamento_tipo"]
+ * Preenche o modal de Composição garantindo a seleção sequencial:
+ * Modal -> Tipo de Policiamento -> Função -> Matrícula -> Salvar
  */
 async function preencherModalComposicao(page, dadosComposicao) {
     try {
-        console.log('\nIniciando fluxo de preenchimento de Composições...');
+        if (!dadosComposicao || !dadosComposicao.integrantes || !dadosComposicao.integrantes.length) {
+            console.log('\nℹ️ Nenhuma composição fornecida no relatório.');
+            return;
+        }
+
+        console.log(`\nIniciando fluxo de preenchimento para ${dadosComposicao.integrantes.length} integrante(s) da Composição...`);
 
         // 1. Clica na aba "Composições" (#composicoes-tab)
         console.log('1. Clicando na aba Composições...');
@@ -524,61 +530,106 @@ async function preencherModalComposicao(page, dadosComposicao) {
         await abaComposicoes.click();
         await page.waitForTimeout(600);
 
-        // 2. Clica no botão para abrir o modal (#modalComposicao)
-        console.log('2. Clicando no botão para abrir o modal Composição...');
-        const btnAbrirModal = page.locator('button[data-target="#modalComposicao"]').first();
-        await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
-        await btnAbrirModal.click();
+        // 2. Loop para cadastrar cada integrante (CMT, MOT, PAT) do início ao fim
+        for (let i = 0; i < dadosComposicao.integrantes.length; i++) {
+            const pol = dadosComposicao.integrantes[i];
+            console.log(`\n====================================================`);
+            console.log(`Cadastrando Integrante [${i + 1}/${dadosComposicao.integrantes.length}]: ${pol.funcao} | Matrícula: ${pol.matricula}`);
+            console.log(`====================================================`);
 
-        // 3. Aguarda a abertura do modal
-        const modalComposicao = page.locator('#modalComposicao');
-        await modalComposicao.waitFor({ state: 'visible', timeout: 8000 });
-        await page.waitForTimeout(500);
+            // 2.1. Clica no botão para abrir o modal
+            console.log('1. Clicando no botão para abrir modal Composição...');
+            const btnAbrirModal = page.locator('button[data-target="#modalComposicao"]').first();
+            await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
+            await btnAbrirModal.click();
 
-        // 4. Seleciona o Tipo de Policiamento no select[name="policiamento_tipo"]
-        const tipoProcurado = dadosComposicao?.tipoPoliciamento || 'Motorizado';
-        console.log(`3. Selecionando Tipo de Policiamento: "${tipoProcurado}"...`);
+            const modalComposicao = page.locator('#modalComposicao');
+            await modalComposicao.waitFor({ state: 'visible', timeout: 8000 });
+            await page.waitForTimeout(500);
 
-        const selectorPoliciamento = '#modalComposicao select[name="policiamento_tipo"], select[name="policiamento_tipo"]';
-        await page.waitForSelector(selectorPoliciamento, { state: 'attached', timeout: 8000 });
+            // 2.2. PRIMEIRO PASSO OBRIGATÓRIO: Seleciona o Tipo de Policiamento para habilitar a Função
+            const tipoProcurado = dadosComposicao.tipoPoliciamento || 'Motorizado';
+            console.log(`2. Selecionando Tipo de Policiamento: "${tipoProcurado}"...`);
+            const selectorPoliciamento = '#modalComposicao select[name="policiamento_tipo"], select[name="policiamento_tipo"]';
+            await page.waitForSelector(selectorPoliciamento, { state: 'attached', timeout: 8000 });
 
-        // Seleção no DOM varrendo o texto das opções visíveis
-        const selecaoSucesso = await page.evaluate(({ selector, labelProcurado }) => {
-            const select = document.querySelector(selector);
-            if (!select) return false;
-
-            const options = Array.from(select.options);
-            const optCorrespondente = options.find(o =>
-                o.text.trim().toLowerCase() === labelProcurado.toLowerCase()
-            );
-
-            if (optCorrespondente) {
-                select.value = optCorrespondente.value;
-                select.dispatchEvent(new Event('change', { bubbles: true }));
-                select.dispatchEvent(new Event('input', { bubbles: true }));
-                return true;
-            }
-            return false;
-        }, { selector: selectorPoliciamento, labelProcurado: tipoProcurado });
-
-        if (!selecaoSucesso) {
-            console.warn(`⚠️ Tipo de Policiamento "${tipoProcurado}" não encontrado. Selecionando "Motorizado" por padrão...`);
-            await page.evaluate((selector) => {
+            await page.evaluate(({ selector, labelProcurado }) => {
                 const select = document.querySelector(selector);
                 if (select) {
-                    const optDefault = Array.from(select.options).find(o => o.text.toLowerCase().includes('motorizado'));
-                    if (optDefault) {
-                        select.value = optDefault.value;
+                    const opt = Array.from(select.options).find(o => o.text.trim().toLowerCase() === labelProcurado.toLowerCase());
+                    if (opt) {
+                        select.value = opt.value;
                         select.dispatchEvent(new Event('change', { bubbles: true }));
+                        select.dispatchEvent(new Event('input', { bubbles: true }));
                     }
                 }
-            }, selectorPoliciamento);
+            }, { selector: selectorPoliciamento, labelProcurado: tipoProcurado });
+
+            // Aguarda o SIPOM processar o evento de mudança e liberar o select de Função
+            await page.waitForTimeout(600);
+
+            // 2.3. SEGUNDO PASSO: Seleciona a Função (Comandante, Motorista, Patrulheiro)
+            console.log(`3. Selecionando Função: "${pol.funcao}"...`);
+            const selectorFuncao = '#modalComposicao select#composicao-funcoes, #modalComposicao select[name="composicao_funcao"]';
+            await page.waitForSelector(selectorFuncao, { state: 'visible', timeout: 8000 });
+
+            await page.evaluate(({ selector, labelFuncao }) => {
+                const select = document.querySelector(selector);
+                if (select) {
+                    const opt = Array.from(select.options).find(o => o.text.trim().toLowerCase() === labelFuncao.toLowerCase());
+                    if (opt) {
+                        select.value = opt.value;
+                        select.dispatchEvent(new Event('change', { bubbles: true }));
+                        select.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                }
+            }, { selector: selectorFuncao, labelFuncao: pol.funcao });
+
+            await page.waitForTimeout(400);
+
+            // 2.4. TERCEIRO PASSO: Preenche a Matrícula (ex: 300.497-6-4)
+            console.log(`4. Preenchendo Matrícula: ${pol.matricula}...`);
+            const inputMatricula = page.locator('#modalComposicao input[name="composicao_matricula"]').first();
+            await inputMatricula.waitFor({ state: 'visible', timeout: 5000 });
+            await inputMatricula.focus();
+            await inputMatricula.fill('');
+            await inputMatricula.fill(pol.matricula);
+
+            await page.evaluate(({ val }) => {
+                const input = document.querySelector('#modalComposicao input[name="composicao_matricula"]');
+                if (input) {
+                    input.value = val;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('keyup', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    input.dispatchEvent(new Event('blur', { bubbles: true }));
+                }
+            }, { val: pol.matricula });
+
+            await page.waitForTimeout(400);
+
+            // 2.5. QUARTO PASSO: Confirma o envio do modal
+            console.log('5. Confirmando gravação do integrante...');
+            await page.evaluate(() => {
+                const btn = document.querySelector('#btn-salvar-composicao') ||
+                    document.querySelector('#modalComposicao input[type="submit"]') ||
+                    document.querySelector('#modalComposicao button:has-text("Atualizar")');
+                if (btn) btn.click();
+            });
+
+            // 2.6. Aguarda o modal sumir completamente do DOM antes da próxima repetição
+            console.log('Aguardando gravação e fechamento do modal...');
+            await modalComposicao.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
+            await page.waitForTimeout(1000);
+
+            console.log(`✅ Integrante (${pol.funcao}) gravado com sucesso!`);
         }
 
-        await page.waitForTimeout(800);
-        console.log(`✅ Tipo de Policiamento ("${tipoProcurado}") selecionado com sucesso!`);
+        console.log('\n====================================================');
+        console.log('✅ COMPOSIÇÃO COMPLETA REGISTRADA COM SUCESSO!');
+        console.log('====================================================');
     } catch (error) {
-        console.warn('⚠️ Falha ao preencher o modal de Composição:', error.message);
+        console.warn('⚠️ Falha no fluxo de Composição:', error.message);
     }
 }
 

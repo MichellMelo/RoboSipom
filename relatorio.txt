@@ -14,9 +14,14 @@ Final: 10h20min
 Endereço:
 Rua 3, 48, Canindezinho, Fortaleza
 
-OPM/VTR/Composição:
+OPM/VTR/:
 21°BPM
 FORÇA TÁTICA ALFA - Vtr R186
+
+Composição:
+CMT: 1° Sgt 19987 FEITOSA M.F.: 134.815-1-2
+MOT: Sd 38510 R MATOS M.F.: 300.49764
+PAT: Sd 36255 LIVIA  M.F.: 300. 26772
 
 Qualificação das Partes:
 Acusado: Nigel Monteiro dos Santos
