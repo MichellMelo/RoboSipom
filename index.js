@@ -433,6 +433,10 @@ async function preencherModalMaterial(page, dadosMaterial) {
                 if (btn) btn.click();
             });
 
+            // Aguarda o modal sumir completamente da tela antes de abrir o botão "+ Material" para o próximo item
+            await modalMaterial.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
+            await page.waitForTimeout(1000);
+
             // Aguarda o fechamento do modal
             console.log('Aguardando gravação e fechamento do modal...');
             await modalMaterial.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });

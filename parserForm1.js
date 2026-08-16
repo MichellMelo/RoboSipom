@@ -374,22 +374,24 @@ function extrairMaterial(textoLimpo) {
         .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
         .replace(/\*/g, '');
 
-    const match = textoSanitizado.match(/Material\s*(?:apreendido\/recuperado)?:\s*([^\n]+)/i);
-    if (!match) {
+    // Captura todo o bloco de texto da seção Material até a linha do Histórico
+    const matchBloco = textoSanitizado.match(/Material\s*(?:apreendido\/recuperado)?:\s*([\s\S]*?)(?=\n\s*(?:Hist[óo]rico|Relato|Delegad[oa]|$))/i);
+
+    if (!matchBloco) {
         return { possuiMaterial: false, lista: [] };
     }
 
-    const textoMaterial = match[1].trim();
-    if (/^(S\/A|N\/A|SEM MATERIAL|NENHUM|NADA)$/i.test(textoMaterial)) {
+    const blocoMaterial = matchBloco[1].trim();
+    if (/^(S\/A|N\/A|SEM MATERIAL|NENHUM|NADA)$/i.test(blocoMaterial)) {
         return { possuiMaterial: false, lista: [] };
     }
 
     const listaMateriais = [];
 
-    // 1. Busca por Drogas
-    const regexDroga = /(COCA[IÍ]NA|CRACK|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE)[^\d]*(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR)?/gi;
+    // --- 1. Captura de DROGAS ---
+    const regexDroga = /(COCA[IÍ]NA|CRACK|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE|DROGA)[^\d]*(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR)?/gi;
     let matchDroga;
-    while ((matchDroga = regexDroga.exec(textoMaterial)) !== null) {
+    while ((matchDroga = regexDroga.exec(blocoMaterial)) !== null) {
         const nomeSubstancia = matchDroga[1].toUpperCase();
         const quantidade = matchDroga[2].replace(',', '.');
 
@@ -405,9 +407,9 @@ function extrairMaterial(textoLimpo) {
         });
     }
 
-    // 2. Busca por Dinheiro
-    const regexDinheiro = /(?:DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR)[^\d]*(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/gi;
-    let matchDinheiro = regexDinheiro.exec(textoMaterial);
+    // --- 2. Captura de DINHEIRO ---
+    const regexDinheiro = /(?:DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR)\s*:?\s*(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/gi;
+    let matchDinheiro = regexDinheiro.exec(blocoMaterial);
     if (matchDinheiro) {
         let v = matchDinheiro[1].replace(/\./g, '');
         if (!v.includes(',')) v += ',00';
@@ -417,10 +419,10 @@ function extrairMaterial(textoLimpo) {
         });
     }
 
-    // 3. Busca por Outros Tipos
+    // --- 3. Captura de OUTROS MATERIAIS (Arma, Munição, Celular, Veículo) ---
     if (listaMateriais.length === 0) {
         let tipoLabel = 'Outros';
-        const descUpper = textoMaterial.toUpperCase();
+        const descUpper = blocoMaterial.toUpperCase();
 
         if (/REV[ÓO]LVER|PISTOLA|ESPINGARDA|ARMA|RIFLE|FUZIL/i.test(descUpper)) tipoLabel = 'Arma';
         else if (/MUNI[ÇC][ÃA]O|CARTUCHO|PROJ[ÉE]TIL/i.test(descUpper)) tipoLabel = 'Munição';
