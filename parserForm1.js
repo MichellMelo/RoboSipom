@@ -439,6 +439,24 @@ function extrairMaterial(textoLimpo) {
 }
 
 /**
+ * Extrai dados da viatura/composição do relatório
+ */
+function extrairComposicao(textoLimpo) {
+    const textoSanitizado = textoLimpo.replace(/\*/g, '');
+    const match = textoSanitizado.match(/OPM\/VTR\/Composi[çc][ãa]o:\s*\n?\s*([^\n]+)\n?\s*([^\n]+)?/i);
+
+    let opm = '21°BPM';
+    let viatura = '';
+
+    if (match) {
+        if (match[1]) opm = match[1].trim();
+        if (match[2]) viatura = match[2].trim();
+    }
+
+    return { opm, viatura };
+}
+
+/**
  * Função principal exportada do parser
  */
 function extrairDadosFormulario1(textoRelatorio) {
@@ -502,7 +520,8 @@ function extrairDadosFormulario1(textoRelatorio) {
         pessoas: extrairPessoas(textoLimpo),
         procedimento: extrairProcedimento(textoLimpo),
         historico: extrairHistorico(textoLimpo),
-        material: extrairMaterial(textoLimpo)
+        material: extrairMaterial(textoLimpo),
+        composicao: extrairComposicao(textoLimpo)
     };
 }
 

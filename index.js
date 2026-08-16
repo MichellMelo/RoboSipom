@@ -319,7 +319,77 @@ async function preencherModalProcedimento(page, procedimento) {
 }
 
 /**
- * Preenche a modal de Materiais e confirma no elemento input#btn-salvar-material
+ * Preenche o modal de Histórico e sincroniza o Summernote
+ */
+async function preencherModalHistorico(page, textoHistorico) {
+    try {
+        if (!textoHistorico) {
+            console.warn('⚠️ Nenhum texto de histórico fornecido para preenchimento.');
+            return;
+        }
+
+        console.log('\nIniciando fluxo de preenchimento do Histórico...');
+
+        console.log('1. Clicando na aba Histórico...');
+        const abaHistorico = page.locator('#historicos-tab, a[href="#historicos"]').first();
+        await abaHistorico.waitFor({ state: 'visible', timeout: 8000 });
+        await abaHistorico.click();
+        await page.waitForTimeout(600);
+
+        console.log('2. Clicando no botão para abrir o modal de Histórico...');
+        const btnAbrirModal = page.locator('#btnHistoricoModal, button[data-target="#modalHistorico"]').first();
+        await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
+        await btnAbrirModal.click();
+
+        const modalHistorico = page.locator('#modalHistorico');
+        await modalHistorico.waitFor({ state: 'visible', timeout: 8000 });
+        await page.waitForTimeout(500);
+
+        console.log('3. Inserindo o texto no editor do Histórico...');
+        await page.evaluate((texto) => {
+            if (window.$ && $('#modalHistorico textarea').length) {
+                try {
+                    $('#modalHistorico textarea').summernote('code', texto);
+                } catch (e) { }
+            }
+
+            const editable = document.querySelector('#modalHistorico .note-editable, #modalHistorico [contenteditable="true"]');
+            if (editable) {
+                editable.innerHTML = texto;
+            }
+
+            const textarea = document.querySelector('#modalHistorico textarea');
+            if (textarea) {
+                textarea.value = texto;
+                textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                textarea.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        }, textoHistorico);
+
+        await page.waitForTimeout(600);
+
+        console.log('4. Confirmando gravação do Histórico...');
+        await page.evaluate(() => {
+            const btnSalvar = document.querySelector('#btn-salvar-historico') || document.querySelector('#modalHistorico input[type="submit"]');
+            if (btnSalvar) {
+                btnSalvar.click();
+            } else {
+                const form = document.querySelector('#modalHistorico form');
+                if (form) form.requestSubmit ? form.requestSubmit() : form.submit();
+            }
+        });
+
+        await modalHistorico.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
+        await page.waitForTimeout(1000);
+
+        console.log('✅ Histórico gravado e salvo com sucesso!');
+    } catch (error) {
+        console.warn('⚠️ Falha ao preencher o Histórico:', error.message);
+    }
+}
+
+/**
+ * Preenche o modal de Materiais e confirma no elemento input#btn-salvar-material
  */
 async function preencherModalMaterial(page, dadosMaterial) {
     try {
@@ -330,21 +400,18 @@ async function preencherModalMaterial(page, dadosMaterial) {
 
         console.log(`\nIniciando fluxo de preenchimento para ${dadosMaterial.lista.length} material(is)...`);
 
-        // 1. Clica na aba "Materiais" (#materiais-tab)
         console.log('1. Clicando na aba Materiais...');
         const abaMateriais = page.locator('#materiais-tab, a[href="#materiais"]').first();
         await abaMateriais.waitFor({ state: 'visible', timeout: 8000 });
         await abaMateriais.click();
         await page.waitForTimeout(600);
 
-        // 2. Loop para cadastrar cada material sequencialmente
         for (let i = 0; i < dadosMaterial.lista.length; i++) {
             const item = dadosMaterial.lista[i];
             console.log(`\n====================================================`);
             console.log(`Cadastrando Material [${i + 1}/${dadosMaterial.lista.length}]: ${item.tipoLabel}`);
             console.log(`====================================================`);
 
-            // Clica no botão "+ Material" para abrir a modal (#modalMaterial)
             const btnAbrirModal = page.locator('button[data-target="#modalMaterial"]').first();
             await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
             await btnAbrirModal.click();
@@ -353,7 +420,6 @@ async function preencherModalMaterial(page, dadosMaterial) {
             await modalMaterial.waitFor({ state: 'visible', timeout: 8000 });
             await page.waitForTimeout(500);
 
-            // Seleciona o Tipo de Material no dropdown
             const selectorTipoMaterial = '#modalMaterial select[name="material_tipo"], select[name="material_tipo"]';
             await page.waitForSelector(selectorTipoMaterial, { state: 'attached', timeout: 8000 });
 
@@ -423,21 +489,12 @@ async function preencherModalMaterial(page, dadosMaterial) {
 
             await page.waitForTimeout(400);
 
-            // Clica no botão correto do SIPOM: #btn-salvar-material
             console.log('Confirmando gravação do Material...');
-            const btnSalvar = page.locator('#btn-salvar-material, input[value="Salvar"]').first();
-
-            // Submissão direta e segura
             await page.evaluate(() => {
                 const btn = document.querySelector('#btn-salvar-material') || document.querySelector('#modalMaterial input[type="submit"]');
                 if (btn) btn.click();
             });
 
-            // Aguarda o modal sumir completamente da tela antes de abrir o botão "+ Material" para o próximo item
-            await modalMaterial.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
-            await page.waitForTimeout(1000);
-
-            // Aguarda o fechamento do modal
             console.log('Aguardando gravação e fechamento do modal...');
             await modalMaterial.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
 
@@ -453,127 +510,31 @@ async function preencherModalMaterial(page, dadosMaterial) {
     }
 }
 
-
 /**
- * Preenche o modal de Material tratando dinamicamente a seleção dos tipos
- * (Arma, Munição, Droga, Veículo, Celular, Dinheiro, Outros)
+ * Acessa a aba Composições e abre o modal de composição (#modalComposicao)
  */
-/**
- * Itera sobre a lista de materiais e insere cada um individualmente no modal do SIPOM
- */
-async function preencherModalMaterial(page, dadosMaterial) {
+async function preencherModalComposicao(page, dadosComposicao) {
     try {
-        if (!dadosMaterial || !dadosMaterial.possuiMaterial || !dadosMaterial.lista.length) {
-            console.log('\nℹ️ Relatório sem apreensão de materiais (S/A). Etapa de Materiais ignorada.');
-            return;
-        }
+        console.log('\nIniciando fluxo de preenchimento de Composições...');
 
-        console.log(`\nIniciando fluxo de preenchimento para ${dadosMaterial.lista.length} material(is)...`);
-
-        // 1. Clica na aba "Materiais" (#materiais-tab)
-        console.log('1. Clicando na aba Materiais...');
-        const abaMateriais = page.locator('#materiais-tab, a[href="#materiais"]').first();
-        await abaMateriais.waitFor({ state: 'visible', timeout: 8000 });
-        await abaMateriais.click();
+        console.log('1. Clicando na aba Composições...');
+        const abaComposicoes = page.locator('#composicoes-tab, a[href="#composicoes"]').first();
+        await abaComposicoes.waitFor({ state: 'visible', timeout: 8000 });
+        await abaComposicoes.click();
         await page.waitForTimeout(600);
 
-        // 2. Loop para cadastrar cada material
-        for (let i = 0; i < dadosMaterial.lista.length; i++) {
-            const item = dadosMaterial.lista[i];
-            console.log(`\n--- Cadastrando Material [${i + 1}/${dadosMaterial.lista.length}]: ${item.tipoLabel} ---`);
+        console.log('2. Clicando no botão para abrir o modal Composição...');
+        const btnAbrirModal = page.locator('button[data-target="#modalComposicao"]').first();
+        await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
+        await btnAbrirModal.click();
 
-            // Clica no botão "+ Material" para abrir o modal
-            const btnAbrirModal = page.locator('button[data-target="#modalMaterial"]').first();
-            await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
-            await btnAbrirModal.click();
+        const modalComposicao = page.locator('#modalComposicao');
+        await modalComposicao.waitFor({ state: 'visible', timeout: 8000 });
+        await page.waitForTimeout(500);
 
-            const modalMaterial = page.locator('#modalMaterial');
-            await modalMaterial.waitFor({ state: 'visible', timeout: 8000 });
-            await page.waitForTimeout(500);
-
-            // Seleciona o tipo no select[name="material_tipo"]
-            const selectorTipoMaterial = '#modalMaterial select[name="material_tipo"], select[name="material_tipo"]';
-            await page.waitForSelector(selectorTipoMaterial, { state: 'attached', timeout: 8000 });
-
-            await page.evaluate(({ selector, labelProcurado }) => {
-                const select = document.querySelector(selector);
-                if (select) {
-                    const opt = Array.from(select.options).find(o => o.text.trim().toLowerCase() === labelProcurado.toLowerCase());
-                    if (opt) {
-                        select.value = opt.value;
-                        select.dispatchEvent(new Event('change', { bubbles: true }));
-                        select.dispatchEvent(new Event('input', { bubbles: true }));
-                    }
-                }
-            }, { selector: selectorTipoMaterial, labelProcurado: item.tipoLabel });
-
-            await page.waitForTimeout(600);
-
-            // --- TRATAMENTO: DROGA ---
-            if (item.tipoLabel.toLowerCase() === 'droga') {
-                console.log(`Sub-tipo: "${item.subTipoDroga}" | Quantidade: ${item.quantidadeDroga}g`);
-
-                await page.evaluate(({ subTipoTexto }) => {
-                    const selects = Array.from(document.querySelectorAll('#modalMaterial select'));
-                    const selectDroga = selects.find(s => s.name !== 'material_tipo');
-                    if (selectDroga) {
-                        const opt = Array.from(selectDroga.options).find(o => o.text.toLowerCase().includes(subTipoTexto.toLowerCase()));
-                        if (opt) {
-                            selectDroga.value = opt.value;
-                            selectDroga.dispatchEvent(new Event('change', { bubbles: true }));
-                        }
-                    }
-                }, { subTipoTexto: item.subTipoDroga });
-
-                await page.waitForTimeout(400);
-
-                const inputQuantidade = page.locator('input[name="droga_quantidade"]').first();
-                await inputQuantidade.waitFor({ state: 'visible', timeout: 5000 });
-                await inputQuantidade.focus();
-                await inputQuantidade.fill('');
-                await inputQuantidade.fill(item.quantidadeDroga.toString());
-                await inputQuantidade.dispatchEvent('input');
-                await inputQuantidade.dispatchEvent('change');
-            }
-
-            // --- TRATAMENTO: DINHEIRO ---
-            if (item.tipoLabel.toLowerCase() === 'dinheiro') {
-                console.log(`Valor do Dinheiro: R$ ${item.valorDinheiro}`);
-
-                const inputDinheiro = page.locator('input[name="dinheiro_quantidade"]').first();
-                await inputDinheiro.waitFor({ state: 'visible', timeout: 5000 });
-                await inputDinheiro.focus();
-                await inputDinheiro.click();
-                await inputDinheiro.fill('');
-                await inputDinheiro.fill(item.valorDinheiro.toString());
-
-                await page.evaluate(({ val }) => {
-                    const input = document.querySelector('input[name="dinheiro_quantidade"]');
-                    if (input) {
-                        input.value = val;
-                        input.dispatchEvent(new Event('input', { bubbles: true }));
-                        input.dispatchEvent(new Event('keyup', { bubbles: true }));
-                        input.dispatchEvent(new Event('change', { bubbles: true }));
-                        input.dispatchEvent(new Event('blur', { bubbles: true }));
-                    }
-                }, { val: item.valorDinheiro.toString() });
-            }
-
-            await page.waitForTimeout(400);
-
-            // Confirma a inclusão do item atual
-            console.log('Confirmando gravação...');
-            const btnSalvar = page.locator('#modalMaterial button:has-text("Atualizar"), #modalMaterial input[value="Atualizar"]').first();
-            await btnSalvar.waitFor({ state: 'visible', timeout: 5000 });
-            await btnSalvar.click({ force: true });
-
-            await page.waitForTimeout(1200);
-            console.log(`✅ ${item.tipoLabel} cadastrado com sucesso!`);
-        }
-
-        console.log('\n✅ Todos os materiais foram cadastrados com sucesso!');
+        console.log('✅ Modal de Composição aberto com sucesso!');
     } catch (error) {
-        console.warn('⚠️ Falha ao preencher Materiais:', error.message);
+        console.warn('⚠️ Falha ao abrir o modal de Composição:', error.message);
     }
 }
 
@@ -652,14 +613,6 @@ async function executarOcorrenciaCompleta(page, dados) {
 
     await executarFormulario2(page, dados);
 
-    //Novo
-    await preencherModalHistorico(page, dados.historico);
-
-    if (dados.material && dados.material.possuiMaterial) {
-        await preencherModalMaterial(page, dados.material);
-    }
-
-
     if (dados.procedimento) {
         await preencherModalProcedimento(page, dados.procedimento);
     }
@@ -667,6 +620,12 @@ async function executarOcorrenciaCompleta(page, dados) {
     if (dados.historico) {
         await preencherModalHistorico(page, dados.historico);
     }
+
+    if (dados.material && dados.material.possuiMaterial) {
+        await preencherModalMaterial(page, dados.material);
+    }
+
+    await preencherModalComposicao(page, dados.composicao);
 }
 
 (async () => {
@@ -705,12 +664,13 @@ async function executarOcorrenciaCompleta(page, dados) {
 
         console.log('\n====================================================');
         console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
-        console.log('1. Criar Ocorrência Completa (Formulário 1 + Pessoas + Procedimento + Histórico + Material)');
+        console.log('1. Criar Ocorrência Completa (Pessoas + Procedimento + Histórico + Material + Composição)');
         console.log('2. Preencher apenas Pessoas na ocorrência atual');
         console.log('3. Preencher apenas Procedimento na ocorrência atual');
         console.log('4. Preencher apenas Histórico na ocorrência atual');
         console.log('5. Abrir apenas modal de Materiais na ocorrência atual');
-        console.log('6. Sair');
+        console.log('6. Abrir apenas modal de Composições na ocorrência atual');
+        console.log('7. Sair');
         console.log('====================================================');
 
         const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
@@ -725,7 +685,9 @@ async function executarOcorrenciaCompleta(page, dados) {
             await preencherModalHistorico(page, dados.historico);
         } else if (opcao.trim() === '5') {
             await preencherModalMaterial(page, dados.material);
-        } else if (opcao.trim() === '6' || opcao.trim().toLowerCase() === 'sair') {
+        } else if (opcao.trim() === '6') {
+            await preencherModalComposicao(page, dados.composicao);
+        } else if (opcao.trim() === '7' || opcao.trim().toLowerCase() === 'sair') {
             continuar = false;
             console.log('Encerrando o robô...');
             await context.close();
