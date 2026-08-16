@@ -292,7 +292,7 @@ function extrairPessoas(textoLimpo) {
 }
 
 /**
- * Extrai informações do procedimento policial
+ * Extrai e padroniza as informações do procedimento policial
  */
 function extrairProcedimento(textoLimpo) {
     const textoSanitizado = textoLimpo.replace(/\*/g, '');
@@ -307,7 +307,7 @@ function extrairProcedimento(textoLimpo) {
             const delegaciaTexto = partes[1];
             const procTexto = partes.slice(2).join('/');
 
-            const procMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO)?\s*N?[°º]?\s*(\d+)-([\d\s]+)\/(\d{4})/i);
+            const procMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO|ATO\s+INFRACIONAL|AIA|BOC)?\s*N?[°º]?\s*(\d+)-([\d\s]+)\/(\d{4})/i);
 
             let procedimentoNome = 'Boletim de Ocorrência - BO';
             let codigoDelegacia = '110';
@@ -320,16 +320,32 @@ function extrairProcedimento(textoLimpo) {
                 numeroBo = procMatch[3].replace(/\s+/g, '').trim();
                 ano = procMatch[4].trim();
 
-                if (tipoSigla.includes('I.P') || tipoSigla.includes('IP')) {
+                // Mapeamento exato para os rótulos do SIPOM
+                if (/I\.?P|INQUERITO/i.test(tipoSigla)) {
                     procedimentoNome = 'Inquerito Policial - IP';
-                } else if (tipoSigla.includes('TCO')) {
+                } else if (/TCO|TERMO\s+CIRCUNSTANCIADO/i.test(tipoSigla)) {
                     procedimentoNome = 'Termo Circunstanciado de Ocorrência - TCO';
+                } else if (/ATO\s+INFRACIONAL|AIA|BOC/i.test(tipoSigla)) {
+                    procedimentoNome = 'Ato Infracional';
+                } else {
+                    procedimentoNome = 'Boletim de Ocorrência - BO';
                 }
             } else {
-                const procSimpleMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO)?\s*N?[°º]?\s*([\d\s-]+)\/(\d{4})/i);
+                const procSimpleMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO|ATO\s+INFRACIONAL|AIA|BOC)?\s*N?[°º]?\s*([\d\s-]+)\/(\d{4})/i);
                 if (procSimpleMatch) {
+                    const tipoSigla = (procSimpleMatch[1] || '').toUpperCase();
                     numeroBo = procSimpleMatch[2].replace(/\s+/g, '').trim();
                     ano = procSimpleMatch[3].trim();
+
+                    if (/I\.?P|INQUERITO/i.test(tipoSigla)) {
+                        procedimentoNome = 'Inquerito Policial - IP';
+                    } else if (/TCO|TERMO\s+CIRCUNSTANCIADO/i.test(tipoSigla)) {
+                        procedimentoNome = 'Termo Circunstanciado de Ocorrência - TCO';
+                    } else if (/ATO\s+INFRACIONAL|AIA|BOC/i.test(tipoSigla)) {
+                        procedimentoNome = 'Ato Infracional';
+                    } else {
+                        procedimentoNome = 'Boletim de Ocorrência - BO';
+                    }
                 }
             }
 

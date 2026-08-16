@@ -682,7 +682,31 @@ async function executarOcorrenciaCompleta(page, dados) {
         await selecionarSelect2(page, 'OPM', '21', dados.opmAtendeu);
     }
 
-    await page.fill('input[placeholder*="ocorrencia"], input[name*="ocorrencia"]', dados.numeroOcorrencia).catch(() => { });
+    if (dados.numeroOcorrencia) {
+        console.log(`Preenchendo Número da Ocorrência (Ficha CIOPS): ${dados.numeroOcorrencia}...`);
+        try {
+            const inputOcorrencia = page.locator('input[name="numero_ocorrencia"]').first();
+            await inputOcorrencia.waitFor({ state: 'visible', timeout: 8000 });
+            await inputOcorrencia.focus();
+            await inputOcorrencia.click();
+            await inputOcorrencia.fill('');
+            await inputOcorrencia.fill(dados.numeroOcorrencia);
+
+            await page.evaluate(({ val }) => {
+                const input = document.querySelector('input[name="numero_ocorrencia"]');
+                if (input) {
+                    input.value = val;
+                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                    input.dispatchEvent(new Event('change', { bubbles: true }));
+                    input.dispatchEvent(new Event('blur', { bubbles: true }));
+                }
+            }, { val: dados.numeroOcorrencia });
+
+            console.log('✅ Número da Ocorrência preenchido com sucesso!');
+        } catch (error) {
+            console.warn('⚠️ Não foi possível localizar o campo input[name="numero_ocorrencia"]:', error.message);
+        }
+    }
 
     console.log('----------------------------------------------------');
     console.log('FORMULÁRIO 1 PREENCHIDO COM SUCESSO!');
@@ -759,13 +783,14 @@ async function executarOcorrenciaCompleta(page, dados) {
 
         console.log('\n====================================================');
         console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
-        console.log('1. Criar Ocorrência Completa (Pessoas + Procedimento + Histórico + Material + Composição)');
+        console.log('1. Criar Ocorrência Completa (Formulário 1 -> Pessoas -> Procedimento -> Histórico -> Material -> Composição)');
         console.log('2. Preencher apenas Pessoas na ocorrência atual');
         console.log('3. Preencher apenas Procedimento na ocorrência atual');
         console.log('4. Preencher apenas Histórico na ocorrência atual');
-        console.log('5. Abrir apenas modal de Materiais na ocorrência atual');
-        console.log('6. Abrir apenas modal de Composições na ocorrência atual');
-        console.log('7. Sair');
+        console.log('5. Preencher apenas Materiais na ocorrência atual');
+        console.log('6. Preencher apenas Composições na ocorrência atual');
+        console.log('7. FAZER TUDO AGORA (Executa Pessoas, Procedimento, Histórico, Material e Composição em sequência)');
+        console.log('8. Sair');
         console.log('====================================================');
 
         const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
@@ -782,7 +807,15 @@ async function executarOcorrenciaCompleta(page, dados) {
             await preencherModalMaterial(page, dados.material);
         } else if (opcao.trim() === '6') {
             await preencherModalComposicao(page, dados.composicao);
-        } else if (opcao.trim() === '7' || opcao.trim().toLowerCase() === 'sair') {
+        } else if (opcao.trim() === '7') {
+            console.log('\n🚀 Iniciando execução sequencial de todas as etapas...');
+            await executarFormulario2(page, dados);
+            if (dados.procedimento) await preencherModalProcedimento(page, dados.procedimento);
+            if (dados.historico) await preencherModalHistorico(page, dados.historico);
+            if (dados.material && dados.material.possuiMaterial) await preencherModalMaterial(page, dados.material);
+            if (dados.composicao) await preencherModalComposicao(page, dados.composicao);
+            console.log('\n🎉 TODOS OS MODAIS FORAM PREENCHIDOS E FINALIZADOS COM SUCESSO!');
+        } else if (opcao.trim() === '8' || opcao.trim().toLowerCase() === 'sair') {
             continuar = false;
             console.log('Encerrando o robô...');
             await context.close();
