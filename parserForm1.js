@@ -390,8 +390,8 @@ function extrairMaterial(textoLimpo) {
         .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
         .replace(/\*/g, '');
 
-    // Captura todo o bloco de texto da seção Material até a linha do Histórico
-    const matchBloco = textoSanitizado.match(/Material\s*(?:apreendido\/recuperado)?:\s*([\s\S]*?)(?=\n\s*(?:Hist[óo]rico|Relato|Delegad[oa]|$))/i);
+    // Captura o bloco da seção Material até a próxima seção (Histórico, Qualificação ou Delegado)
+    const matchBloco = textoSanitizado.match(/Material\s*:?\s*([\s\S]*?)(?=\n\s*(?:Hist[óo]rico|Relato|Delegad[oa]|Qualifica[çc][ãa]o|$))/i);
 
     if (!matchBloco) {
         return { possuiMaterial: false, lista: [] };
@@ -404,26 +404,38 @@ function extrairMaterial(textoLimpo) {
 
     const listaMateriais = [];
 
-    // --- 1. Captura de DROGAS ---
-    const regexDroga = /(COCA[IÍ]NA|CRACK|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE|DROGA)[^\d]*(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR)?/gi;
-    let matchDroga;
-    while ((matchDroga = regexDroga.exec(blocoMaterial)) !== null) {
-        const nomeSubstancia = matchDroga[1].toUpperCase();
-        const quantidade = matchDroga[2].replace(',', '.');
+    // --- 1. CAPTURA DE DROGAS (Linha por linha / Item por item) ---
+    const linhas = blocoMaterial.split('\n');
 
-        let subTipoDroga = 'Maconha - gramas (g)';
-        if (/COCA[IÍ]NA/i.test(nomeSubstancia)) subTipoDroga = 'Cocaína - gramas (g)';
-        else if (/CRACK/i.test(nomeSubstancia)) subTipoDroga = 'Crack - gramas (g)';
-        else if (/SKANK|SKUNK/i.test(nomeSubstancia)) subTipoDroga = 'Skank - gramas (g)';
+    for (let linha of linhas) {
+        const linhaUpper = linha.toUpperCase();
 
-        listaMateriais.push({
-            tipoLabel: 'Droga',
-            subTipoDroga: subTipoDroga,
-            quantidadeDroga: quantidade
-        });
+        // Verifica se a linha trata de Droga
+        if (/DROGA|CRACK|COCA[IÍ]NA|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE/i.test(linhaUpper)) {
+            const matchQtd = linhaUpper.match(/(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR|PINOS|PEDRAS|SACOS)?/i);
+            const quantidade = matchQtd ? matchQtd[1].replace(',', '.') : '1';
+
+            let subTipoDroga = 'Maconha - gramas (g)'; // Padrão
+
+            if (/CRACK/i.test(linhaUpper)) {
+                subTipoDroga = 'Crack - gramas (g)';
+            } else if (/COCA[IÍ]NA|COCAINA/i.test(linhaUpper)) {
+                subTipoDroga = 'Cocaína - gramas (g)';
+            } else if (/SKANK|SKUNK/i.test(linhaUpper)) {
+                subTipoDroga = 'Skank - gramas (g)';
+            } else if (/HAXIXE/i.test(linhaUpper)) {
+                subTipoDroga = 'Haxixe - gramas (g)';
+            }
+
+            listaMateriais.push({
+                tipoLabel: 'Droga',
+                subTipoDroga: subTipoDroga,
+                quantidadeDroga: quantidade
+            });
+        }
     }
 
-    // --- 2. Captura de DINHEIRO ---
+    // --- 2. CAPTURA DE DINHEIRO ---
     const regexDinheiro = /(?:DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR)\s*:?\s*(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/gi;
     let matchDinheiro = regexDinheiro.exec(blocoMaterial);
     if (matchDinheiro) {
@@ -435,7 +447,7 @@ function extrairMaterial(textoLimpo) {
         });
     }
 
-    // --- 3. Captura de OUTROS MATERIAIS (Arma, Munição, Celular, Veículo) ---
+    // --- 3. SE NÃO CAPTUROU DROGA NEM DINHEIRO, RÓTULOS GENÉRICOS ---
     if (listaMateriais.length === 0) {
         let tipoLabel = 'Outros';
         const descUpper = blocoMaterial.toUpperCase();
@@ -467,22 +479,22 @@ function formatarMatricula(matriculaBruta) {
 }
 
 /**
- * Extrai dados da viatura/composição e inferência do tipo de policiamento
+ * Extrai os dados de composição (CMT, MOT, PAT) tolerando variações nos cabeçalhos
  */
 function extrairComposicao(textoLimpo) {
     const textoSanitizado = textoLimpo.replace(/\*/g, '');
 
-    // 1. Extração do Tipo de Policiamento
+    // 1. Identificação do Tipo de Policiamento
     let tipoPoliciamento = 'Motorizado';
     const matchVtr = textoSanitizado.match(/OPM\/VTR\/?:\s*([\s\S]*?)(?=\n\s*Composi[çc][ãa]o:|$)/i);
     if (matchVtr) {
         const textoVtr = matchVtr[1].toUpperCase();
-        if (/MOTO|RAIO/i.test(textoVtr)) tipoPoliciamento = 'Motopatrulhamento';
+        if (/MOTO|RAIO|MOTOPATRULHAMENTO/i.test(textoVtr)) tipoPoliciamento = 'Motopatrulhamento';
         else if (/A PE|PEDESTRE/i.test(textoVtr)) tipoPoliciamento = 'A pé';
         else if (/INTELIG[EÊ]NCIA|SAI/i.test(textoVtr)) tipoPoliciamento = 'Inteligência';
     }
 
-    // 2. Extração do Bloco de Composição (CMT, MOT, PAT)
+    // 2. Extração Flexível do Bloco da Composição
     const matchComposicao = textoSanitizado.match(/Composi[çc][ãa]o:\s*([\s\S]*?)(?=\n\s*(?:Qualifica[çc][ãa]o|Delegad[oa]|Material|Hist[óo]rico|$))/i);
     const integrantes = [];
 
@@ -493,19 +505,27 @@ function extrairComposicao(textoLimpo) {
             const linhaLimpa = linha.trim();
             if (!linhaLimpa) continue;
 
-            const matchLinha = linhaLimpa.match(/^(CMT|MOT|PAT)\s*:?\s*(.*?)(?:M\.?F\.?|Matr[íi]cula)?\s*:?\s*([\d\.\s-]+)$/i);
+            // Busca linhas iniciando com CMT, MOT ou PAT
+            const matchLinha = linhaLimpa.match(/^(CMT|MOT|PAT)\s*:?\s*(.*?)(?:M\.?F\.?|Matr[íi]cula)?\s*:?\s*([\d\.\s-X]+)$/i);
 
             if (matchLinha) {
                 const sigla = matchLinha[1].toUpperCase();
-                const matriculaBruta = matchLinha[3].trim();
+                let matriculaBruta = matchLinha[3].trim();
 
                 let funcaoLabel = 'Patrulheiro';
                 if (sigla === 'CMT') funcaoLabel = 'Comandante';
                 else if (sigla === 'MOT') funcaoLabel = 'Motorista';
 
+                // Tratamento de segurança caso a matrícula seja "Não informado"
+                if (/N[ÃA]O\s+INFORMADO/i.test(matriculaBruta)) {
+                    matriculaBruta = '';
+                } else {
+                    matriculaBruta = formatarMatricula(matriculaBruta);
+                }
+
                 integrantes.push({
                     funcao: funcaoLabel,
-                    matricula: formatarMatricula(matriculaBruta)
+                    matricula: matriculaBruta
                 });
             }
         }

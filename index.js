@@ -4,14 +4,9 @@ const path = require('path');
 const readline = require('readline');
 const { extrairDadosFormulario1 } = require('./parserForm1');
 
-function obterTextoRelatorio() {
-    const caminhoArquivo = path.join(__dirname, 'relatorio.txt');
-    if (fs.existsSync(caminhoArquivo)) {
-        return fs.readFileSync(caminhoArquivo, 'utf-8');
-    }
-    throw new Error('Arquivo relatorio.txt não encontrado.');
-}
-
+/**
+ * Interface interativa para leitura via terminal
+ */
 function aguardarComando(mensagem) {
     const rl = readline.createInterface({
         input: process.stdin,
@@ -24,41 +19,90 @@ function aguardarComando(mensagem) {
 }
 
 /**
- * Preenche o dropdown Select2 (jQuery) no SIPOM
+ * Busca todos os arquivos .txt na pasta do projeto
+ */
+function listarArquivosRelatorio() {
+    const pastaAtual = __dirname;
+    const arquivos = fs.readdirSync(pastaAtual).filter(f => f.endsWith('.txt'));
+    return arquivos;
+}
+
+/**
+ * Permite ao usuário escolher qual relatório ler ou lê o arquivo padrão 'relatorio.txt'
+ */
+async function selecionarEObterTextoRelatorio(nomeArquivoDefinido = null) {
+    if (nomeArquivoDefinido) {
+        const caminho = path.join(__dirname, nomeArquivoDefinido);
+        if (fs.existsSync(caminho)) {
+            return { nome: nomeArquivoDefinido, conteudo: fs.readFileSync(caminho, 'utf-8') };
+        }
+    }
+
+    const arquivos = listarArquivosRelatorio();
+
+    if (arquivos.length === 0) {
+        throw new Error('Nenhum arquivo .txt de relatório foi encontrado na pasta do robô.');
+    }
+
+    if (arquivos.length === 1) {
+        const caminho = path.join(__dirname, arquivos[0]);
+        return { nome: arquivos[0], conteudo: fs.readFileSync(caminho, 'utf-8') };
+    }
+
+    console.log('\n====================================================');
+    console.log('ARQUIVOS DE RELATÓRIO ENCONTRADOS:');
+    arquivos.forEach((arq, index) => {
+        console.log(`${index + 1}. ${arq}`);
+    });
+    console.log('====================================================');
+
+    const opcao = await aguardarComando('Digite o número do relatório que deseja carregar: ');
+    const idx = parseInt(opcao.trim(), 10) - 1;
+
+    if (!isNaN(idx) && arquivos[idx]) {
+        const caminho = path.join(__dirname, arquivos[idx]);
+        return { nome: arquivos[idx], conteudo: fs.readFileSync(caminho, 'utf-8') };
+    }
+
+    console.log('⚠️ Opção inválida. Carregando o primeiro arquivo por padrão...');
+    const caminhoPadrao = path.join(__dirname, arquivos[0]);
+    return { nome: arquivos[0], conteudo: fs.readFileSync(caminhoPadrao, 'utf-8') };
+}
+
+/**
+ * Preenche o dropdown Select2 (jQuery) no SIPOM de forma ultrarrápida e direta
  */
 async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
     try {
         console.log(`Buscando ${labelCampo}: "${valorOpcao}"...`);
 
+        // 1. Localiza a caixa do Select2 associada ao rótulo/campo sem fazer varredura profunda no DOM
         const containerSelect2 = page.locator(`
-            div.form-group:has-text("${labelCampo}") .select2-container,
-            div:has-text("${labelCampo}") + .select2-container,
-            .select2-container:has-text("${labelCampo}")
+            .form-group:has-text("${labelCampo}") .select2-container,
+            label:has-text("${labelCampo}") + .select2-container,
+            div:has-text("${labelCampo}") .select2-selection
         `).first();
 
-        const elementoClique = (await containerSelect2.isVisible().catch(() => false))
-            ? containerSelect2
-            : page.locator('.select2-container').first();
+        // Aguarda a visibilidade do elemento de clique (timeout reduzido para no máximo 3s)
+        await containerSelect2.waitFor({ state: 'visible', timeout: 3000 });
+        await containerSelect2.click();
 
-        await elementoClique.waitFor({ state: 'visible', timeout: 8000 });
-        await elementoClique.click();
-        await page.waitForTimeout(300);
+        // 2. Localiza o input de busca aberto no Select2
+        const campoBusca = page.locator('.select2-container--open .select2-search__field, input.select2-search__field').first();
 
-        const campoBusca = page.locator('.select2-search__field, input.select2-search__field').last();
-
-        if (await campoBusca.isVisible({ timeout: 1500 }).catch(() => false)) {
+        if (await campoBusca.isVisible({ timeout: 1000 }).catch(() => false)) {
             await campoBusca.fill(valorBusca);
-            await page.waitForTimeout(400);
         }
 
-        const opcao = page.locator(`.select2-results__option:has-text("${valorOpcao}")`).first();
-        await opcao.waitFor({ state: 'visible', timeout: 5000 });
+        // 3. Clica na primeira opção que corresponda à busca sem aguardar tempos fixos
+        const opcao = page.locator(`.select2-results__option:has-text("${valorOpcao}"), .select2-results__option--highlighted`).first();
+        await opcao.waitFor({ state: 'visible', timeout: 3000 });
         await opcao.click();
 
         console.log(`✅ ${labelCampo} preenchido com sucesso!`);
         return true;
     } catch (error) {
-        console.warn(`⚠️ Não foi possível selecionar ${labelCampo} ("${valorOpcao}").`);
+        console.warn(`⚠️ Não foi possível selecionar ${labelCampo} ("${valorOpcao}"). Seguindo fluxo...`);
         await page.keyboard.press('Escape').catch(() => { });
         return false;
     }
@@ -439,23 +483,31 @@ async function preencherModalMaterial(page, dadosMaterial) {
 
             // --- TRATAMENTO: DROGA ---
             if (item.tipoLabel.toLowerCase() === 'droga') {
-                console.log(`Selecionando sub-tipo: "${item.subTipoDroga}" | Quantidade: ${item.quantidadeDroga}g`);
+                console.log(`Sub-tipo detectado: "${item.subTipoDroga}" | Quantidade: ${item.quantidadeDroga}g`);
 
+                // Seleciona o sub-tipo exato da droga no dropdown
                 await page.evaluate(({ subTipoTexto }) => {
                     const selects = Array.from(document.querySelectorAll('#modalMaterial select'));
-                    const selectDroga = selects.find(s => s.name !== 'material_tipo');
-                    if (selectDroga) {
-                        const opt = Array.from(selectDroga.options).find(o => o.text.toLowerCase().includes(subTipoTexto.toLowerCase()));
+                    // Busca o dropdown que contém as opções de sub-tipos de drogas
+                    const selectSubtipo = selects.find(s => s.name !== 'material_tipo');
+
+                    if (selectSubtipo) {
+                        const opt = Array.from(selectSubtipo.options).find(o =>
+                            o.text.trim().toLowerCase().includes(subTipoTexto.toLowerCase()) ||
+                            subTipoTexto.toLowerCase().includes(o.text.trim().toLowerCase())
+                        );
                         if (opt) {
-                            selectDroga.value = opt.value;
-                            selectDroga.dispatchEvent(new Event('change', { bubbles: true }));
+                            selectSubtipo.value = opt.value;
+                            selectSubtipo.dispatchEvent(new Event('change', { bubbles: true }));
+                            selectSubtipo.dispatchEvent(new Event('input', { bubbles: true }));
                         }
                     }
                 }, { subTipoTexto: item.subTipoDroga });
 
                 await page.waitForTimeout(400);
 
-                const inputQuantidade = page.locator('input[name="droga_quantidade"]').first();
+                // Preenche a quantidade em gramas
+                const inputQuantidade = page.locator('#modalMaterial input[name="droga_quantidade"], input[name="droga_quantidade"]').first();
                 await inputQuantidade.waitFor({ state: 'visible', timeout: 5000 });
                 await inputQuantidade.focus();
                 await inputQuantidade.fill('');
@@ -523,21 +575,18 @@ async function preencherModalComposicao(page, dadosComposicao) {
 
         console.log(`\nIniciando fluxo de preenchimento para ${dadosComposicao.integrantes.length} integrante(s) da Composição...`);
 
-        // 1. Clica na aba "Composições" (#composicoes-tab)
         console.log('1. Clicando na aba Composições...');
         const abaComposicoes = page.locator('#composicoes-tab, a[href="#composicoes"]').first();
         await abaComposicoes.waitFor({ state: 'visible', timeout: 8000 });
         await abaComposicoes.click();
         await page.waitForTimeout(600);
 
-        // 2. Loop para cadastrar cada integrante (CMT, MOT, PAT) do início ao fim
         for (let i = 0; i < dadosComposicao.integrantes.length; i++) {
             const pol = dadosComposicao.integrantes[i];
             console.log(`\n====================================================`);
             console.log(`Cadastrando Integrante [${i + 1}/${dadosComposicao.integrantes.length}]: ${pol.funcao} | Matrícula: ${pol.matricula}`);
             console.log(`====================================================`);
 
-            // 2.1. Clica no botão para abrir o modal
             console.log('1. Clicando no botão para abrir modal Composição...');
             const btnAbrirModal = page.locator('button[data-target="#modalComposicao"]').first();
             await btnAbrirModal.waitFor({ state: 'visible', timeout: 8000 });
@@ -547,7 +596,6 @@ async function preencherModalComposicao(page, dadosComposicao) {
             await modalComposicao.waitFor({ state: 'visible', timeout: 8000 });
             await page.waitForTimeout(500);
 
-            // 2.2. PRIMEIRO PASSO OBRIGATÓRIO: Seleciona o Tipo de Policiamento para habilitar a Função
             const tipoProcurado = dadosComposicao.tipoPoliciamento || 'Motorizado';
             console.log(`2. Selecionando Tipo de Policiamento: "${tipoProcurado}"...`);
             const selectorPoliciamento = '#modalComposicao select[name="policiamento_tipo"], select[name="policiamento_tipo"]';
@@ -565,10 +613,8 @@ async function preencherModalComposicao(page, dadosComposicao) {
                 }
             }, { selector: selectorPoliciamento, labelProcurado: tipoProcurado });
 
-            // Aguarda o SIPOM processar o evento de mudança e liberar o select de Função
             await page.waitForTimeout(600);
 
-            // 2.3. SEGUNDO PASSO: Seleciona a Função (Comandante, Motorista, Patrulheiro)
             console.log(`3. Selecionando Função: "${pol.funcao}"...`);
             const selectorFuncao = '#modalComposicao select#composicao-funcoes, #modalComposicao select[name="composicao_funcao"]';
             await page.waitForSelector(selectorFuncao, { state: 'visible', timeout: 8000 });
@@ -587,7 +633,6 @@ async function preencherModalComposicao(page, dadosComposicao) {
 
             await page.waitForTimeout(400);
 
-            // 2.4. TERCEIRO PASSO: Preenche a Matrícula (ex: 300.497-6-4)
             console.log(`4. Preenchendo Matrícula: ${pol.matricula}...`);
             const inputMatricula = page.locator('#modalComposicao input[name="composicao_matricula"]').first();
             await inputMatricula.waitFor({ state: 'visible', timeout: 5000 });
@@ -608,7 +653,6 @@ async function preencherModalComposicao(page, dadosComposicao) {
 
             await page.waitForTimeout(400);
 
-            // 2.5. QUARTO PASSO: Confirma o envio do modal
             console.log('5. Confirmando gravação do integrante...');
             await page.evaluate(() => {
                 const btn = document.querySelector('#btn-salvar-composicao') ||
@@ -617,7 +661,6 @@ async function preencherModalComposicao(page, dadosComposicao) {
                 if (btn) btn.click();
             });
 
-            // 2.6. Aguarda o modal sumir completamente do DOM antes da próxima repetição
             console.log('Aguardando gravação e fechamento do modal...');
             await modalComposicao.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
             await page.waitForTimeout(1000);
@@ -660,21 +703,44 @@ async function executarOcorrenciaCompleta(page, dados) {
         await selecionarSelect2(page, 'Unidade Militar', '21', dados.unidadeLocal);
     }
 
+    // === INÍCIO DO BLOCO DE ENDEREÇO ===
     if (dados.enderecoBusca) {
         try {
             const inputBusca = page.locator('input[placeholder*="Digite um local"]');
+            await inputBusca.waitFor({ state: 'visible', timeout: 5000 });
             await inputBusca.fill(dados.enderecoBusca);
 
             await page.waitForSelector('.pac-item', { timeout: 4000 });
             await page.keyboard.press('ArrowDown');
             await page.keyboard.press('Enter');
+            await page.waitForTimeout(500);
         } catch (e) {
-            console.warn('Google Places indisponível. Preenchendo campos manuais...');
-            await page.fill('input[placeholder*="Rod., Rua"]', dados.ruaFallback).catch(() => { });
-            await page.fill('input[placeholder*="Bairro"]', dados.bairroFallback).catch(() => { });
-            await page.fill('input[placeholder*="Cidade"]', dados.cidadeFallback).catch(() => { });
+            console.warn('⚠️ Google Places indisponível ou lento. Preenchendo campos manuais...');
+            try {
+                if (dados.ruaFallback) {
+                    await page.fill('input[placeholder*="Rod., Rua"]', String(dados.ruaFallback));
+                }
+                if (dados.bairroFallback) {
+                    await page.fill('input[placeholder*="Bairro"]', String(dados.bairroFallback));
+                }
+                if (dados.cidadeFallback) {
+                    await page.fill('input[placeholder*="Cidade"]', String(dados.cidadeFallback));
+                }
+            } catch (err) {
+                console.warn('⚠️ Erro ao preencher campos manuais de endereço, seguindo o fluxo...');
+            }
         }
     }
+
+    // Preenchimento do Numeral protegido contra undefined
+    try {
+        if (dados.numeral) {
+            await page.fill('input[placeholder*="Numeral"]', String(dados.numeral));
+        }
+    } catch (e) {
+        console.warn('⚠️ Não foi possível preencher o Numeral, seguindo o fluxo...');
+    }
+    // === FIM DO BLOCO DE ENDEREÇO ===
 
     await page.fill('input[placeholder*="Numeral"]', dados.numeral).catch(() => { });
 
@@ -775,13 +841,22 @@ async function executarOcorrenciaCompleta(page, dados) {
     await page.waitForURL('**/sipom.pm.ce.gov.br/**', { timeout: 0 });
     console.log('Login detectado com sucesso!');
 
-    let continuar = true;
+    let continuarSistema = true;
 
-    while (continuar) {
-        const textoBruto = obterTextoRelatorio();
-        const dados = extrairDadosFormulario1(textoBruto);
+    while (continuarSistema) {
+        let relatorioAtual = null;
+
+        try {
+            relatorioAtual = await selecionarEObterTextoRelatorio();
+        } catch (err) {
+            console.error('❌ Erro:', err.message);
+            break;
+        }
+
+        const dados = extrairDadosFormulario1(relatorioAtual.conteudo);
 
         console.log('\n====================================================');
+        console.log(`📄 RELATÓRIO CARREGADO: [ ${relatorioAtual.nome} ]`);
         console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
         console.log('1. Criar Ocorrência Completa (Formulário 1 -> Pessoas -> Procedimento -> Histórico -> Material -> Composição)');
         console.log('2. Preencher apenas Pessoas na ocorrência atual');
@@ -790,7 +865,8 @@ async function executarOcorrenciaCompleta(page, dados) {
         console.log('5. Preencher apenas Materiais na ocorrência atual');
         console.log('6. Preencher apenas Composições na ocorrência atual');
         console.log('7. FAZER TUDO AGORA (Executa Pessoas, Procedimento, Histórico, Material e Composição em sequência)');
-        console.log('8. Sair');
+        console.log('8. Trocar de arquivo de Relatório');
+        console.log('9. Sair do Sistema');
         console.log('====================================================');
 
         const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
@@ -815,8 +891,20 @@ async function executarOcorrenciaCompleta(page, dados) {
             if (dados.material && dados.material.possuiMaterial) await preencherModalMaterial(page, dados.material);
             if (dados.composicao) await preencherModalComposicao(page, dados.composicao);
             console.log('\n🎉 TODOS OS MODAIS FORAM PREENCHIDOS E FINALIZADOS COM SUCESSO!');
-        } else if (opcao.trim() === '8' || opcao.trim().toLowerCase() === 'sair') {
-            continuar = false;
+        } else if (opcao.trim() === '8') {
+            console.log('\nRetornando para a seleção de relatório...');
+            continue;
+        } else if (opcao.trim() === '9' || opcao.trim().toLowerCase() === 'sair') {
+            continuarSistema = false;
+            console.log('Encerrando o robô...');
+            await context.close();
+            break;
+        }
+
+        console.log('\n====================================================');
+        const proximoComando = await aguardarComando('Deseja ler outro relatório agora? (S/N): ');
+        if (proximoComando.trim().toLowerCase() !== 's') {
+            continuarSistema = false;
             console.log('Encerrando o robô...');
             await context.close();
             break;
