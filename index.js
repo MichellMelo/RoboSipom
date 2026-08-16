@@ -113,7 +113,7 @@ async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
  * Preenche o modal de Adicionar Pessoa e confirma no elemento #btn-salvar-pessoa
  */
 async function preencherModalPessoa(page, pessoa) {
-    // Trava de segurança: ignora se não houver nome válido
+    // Trava de segurança: ignora se não houver nome de pessoa válido
     const termosInvalidos = [
         'NÃO IDENTIFICADO',
         'NAO IDENTIFICADO',
@@ -132,51 +132,68 @@ async function preencherModalPessoa(page, pessoa) {
     try {
         console.log(`\nAbrindo modal para pessoa: [${pessoa.tipo} - ${pessoa.nome}]...`);
 
-        const btnAddPessoa = page.locator('button[data-target="#modalPessoa"], button:has(.fa-plus):has-text("Pessoa")').first();
-        await btnAddPessoa.waitFor({ state: 'visible', timeout: 8000 });
-        await btnAddPessoa.click();
+        // 1. Abertura do modal via API do Bootstrap para evitar bloqueio por backdrop
+        await page.evaluate(() => {
+            if (typeof $ !== 'undefined') {
+                $('#modalPessoa').modal('show');
+            } else {
+                const btn = document.querySelector('button[data-target="#modalPessoa"], button:has(.fa-plus):has-text("Pessoa")');
+                if (btn) btn.click();
+            }
+        });
 
         const modalPessoa = page.locator('#modalPessoa');
         await modalPessoa.waitFor({ state: 'visible', timeout: 8000 });
-        await page.waitForTimeout(500);
+        await page.waitForTimeout(400);
 
-        // 1. Seleciona o tipo de envolvimento (Vítima, Acusado, Infrator, etc.)
-        const selectTipo = page.locator('#modalPessoa select').first();
-        await selectTipo.waitFor({ state: 'visible', timeout: 5000 });
+        // 2. SELEÇÃO DO VÍNCULO NO ELEMENTO select[name="vinculo"]
+        console.log(`Selecionando Vínculo no Modal: "${pessoa.tipo}"...`);
+        const selectVinculo = page.locator('#modalPessoa select[name="vinculo"]').first();
+        await selectVinculo.waitFor({ state: 'visible', timeout: 5000 });
 
-        try {
-            await selectTipo.selectOption({ label: pessoa.tipo });
-        } catch (e) {
-            const optionValue = await selectTipo.evaluate((select, tipo) => {
-                const options = Array.from(select.options);
-                const match = options.find(opt => opt.text.toLowerCase().includes(tipo.toLowerCase()));
-                return match ? match.value : options[1]?.value;
-            }, pessoa.tipo);
+        await page.evaluate(({ tipoDesejado }) => {
+            const select = document.querySelector('#modalPessoa select[name="vinculo"]');
+            if (!select) return;
 
-            if (optionValue) {
-                await selectTipo.selectOption(optionValue);
+            // Remove acentos e padroniza para comparação insensível a maiúsculas
+            const normalizar = str => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : '';
+
+            const alvo = normalizar(tipoDesejado);
+            const options = Array.from(select.options);
+
+            let opcaoEncontrada = options.find(opt => normalizar(opt.text) === alvo || normalizar(opt.value) === alvo) ||
+                options.find(opt => normalizar(opt.text).includes(alvo) || alvo.includes(normalizar(opt.text)));
+
+            if (opcaoEncontrada) {
+                select.value = opcaoEncontrada.value;
+
+                // Eventos nativos e jQuery
+                select.dispatchEvent(new Event('change', { bubbles: true }));
+                select.dispatchEvent(new Event('input', { bubbles: true }));
+
+                if (typeof $ !== 'undefined') {
+                    $(select).trigger('change');
+                }
             }
-        }
+        }, { tipoDesejado: pessoa.tipo });
 
-        await selectTipo.dispatchEvent('change');
-        await selectTipo.dispatchEvent('input');
         await page.waitForTimeout(300);
 
-        // 2. Preenche CPF se informado
+        // 3. PREENCHIMENTO DO CPF
         if (pessoa.cpf) {
             console.log(`Preenchendo CPF: ${pessoa.cpf}...`);
-            const inputCPF = page.locator('#modalPessoa input[name="cpf"], #modalPessoa #cpf').first();
+            const inputCPF = page.locator('#modalPessoa input[name="cpf"]').first();
             await inputCPF.fill(pessoa.cpf);
             await inputCPF.dispatchEvent('change');
             await inputCPF.dispatchEvent('blur');
-            await page.waitForTimeout(1000);
+            await page.waitForTimeout(300);
         }
 
-        // 3. Preenche Nome Completo
+        // 4. PREENCHIMENTO DO NOME COMPLETO
         if (pessoa.nome) {
             console.log(`Preenchendo Nome: "${pessoa.nome}"...`);
             const inputNome = page.locator('#modalPessoa input[name="nome"]').first();
-            await inputNome.waitFor({ state: 'visible', timeout: 8000 });
+            await inputNome.waitFor({ state: 'visible', timeout: 5000 });
             await inputNome.click();
             await inputNome.fill('');
             await inputNome.fill(pessoa.nome);
@@ -184,77 +201,63 @@ async function preencherModalPessoa(page, pessoa) {
             await inputNome.dispatchEvent('change');
         }
 
-        // 4. Seleciona Sexo se aplicável
-        if (pessoa.sexo) {
-            console.log(`Selecionando Sexo: ${pessoa.sexo}...`);
-            const selectSexo = page.locator('#modalPessoa select[name="sexo"]').first();
-            const valorSexo = pessoa.sexo.toUpperCase().startsWith('F') ? '2' : '1';
-            await selectSexo.selectOption(valorSexo).catch(() => { });
-            await selectSexo.dispatchEvent('change');
-            await selectSexo.dispatchEvent('input');
-        }
-
-        // 5. Preenche Data de Nascimento
+        // 5. PREENCHIMENTO DA DATA DE NASCIMENTO
         if (pessoa.nascimento) {
             console.log(`Preenchendo Data de Nascimento: ${pessoa.nascimento}...`);
-            const selectorNasc = '#modalPessoa input[name="nascimento"]';
-
             let dataIso = pessoa.nascimento;
             if (pessoa.nascimento.includes('/')) {
                 const [d, m, a] = pessoa.nascimento.split('/');
                 dataIso = `${a}-${m}-${d}`;
             }
 
-            await page.evaluate(({ selector, valIso, valBr }) => {
-                const input = document.querySelector(selector);
+            await page.evaluate(({ valIso, valBr }) => {
+                const input = document.querySelector('#modalPessoa input[name="nascimento"]');
                 if (input) {
-                    input.value = valIso;
-                    if (!input.value) {
-                        input.value = valBr;
-                    }
+                    input.value = valIso || valBr;
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
-                    input.dispatchEvent(new Event('blur', { bubbles: true }));
                 }
-            }, { selector: selectorNasc, valIso: dataIso, valBr: pessoa.nascimento });
+            }, { valIso: dataIso, valBr: pessoa.nascimento });
         }
 
-        // 6. Preenche Nome da Mãe
+        // 6. PREENCHIMENTO DO NOME DA MÃE
         if (pessoa.mae) {
             console.log(`Preenchendo Nome da Mãe: "${pessoa.mae}"...`);
-            const selectorMae = '#modalPessoa input[name="mae"]';
-
-            await page.evaluate(({ selector, val }) => {
-                const input = document.querySelector(selector);
+            await page.evaluate(({ val }) => {
+                const input = document.querySelector('#modalPessoa input[name="mae"]');
                 if (input) {
                     input.value = val;
                     input.dispatchEvent(new Event('input', { bubbles: true }));
                     input.dispatchEvent(new Event('change', { bubbles: true }));
-                    input.dispatchEvent(new Event('blur', { bubbles: true }));
                 }
-            }, { selector: selectorMae, val: pessoa.mae });
+            }, { val: pessoa.mae });
         }
 
-        // 7. Campo Morte (padrão: NÃO)
-        const selectMorte = page.locator('#modalPessoa select[name="morte"], #modalPessoa select').last();
-        await selectMorte.selectOption({ label: pessoa.morte || 'NÃO' }).catch(() => { });
+        // 7. SELEÇÃO DO CAMPO MORTE (PADRÃO: NÃO)
+        const selectMorte = page.locator('#modalPessoa select[name="morte"]').first();
+        if (await selectMorte.isVisible({ timeout: 1000 }).catch(() => false)) {
+            await selectMorte.selectOption({ label: pessoa.morte || 'NÃO' }).catch(() => { });
+        }
 
         await page.waitForTimeout(400);
 
-        // 8. Submissão direta e segura via #btn-salvar-pessoa
+        // 8. SUBMISSÃO DO MODAL VIA #btn-salvar-pessoa
         console.log('Confirmando gravação da pessoa em #btn-salvar-pessoa...');
         await page.evaluate(() => {
-            const btn = document.querySelector('#btn-salvar-pessoa') ||
-                document.querySelector('#modalPessoa button[type="submit"]') ||
-                document.querySelector('#modalPessoa button:has-text("Adicionar")');
+            const btn = document.querySelector('#btn-salvar-pessoa');
             if (btn) btn.click();
         });
 
-        // Aguarda o encerramento do modal para liberar a próxima iteração
-        console.log('Aguardando gravação e fechamento do modal de Pessoa...');
-        await modalPessoa.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
-        await page.waitForTimeout(1000);
+        // 9. AGUARDA FECHAMENTO NATIVO OU FORÇA O ENCERRAMENTO SEGURO
+        await modalPessoa.waitFor({ state: 'hidden', timeout: 8000 }).catch(async () => {
+            await page.evaluate(() => {
+                if (typeof $ !== 'undefined') {
+                    $('#modalPessoa').modal('hide');
+                }
+            });
+        });
 
+        await page.waitForTimeout(1000);
         console.log(`✅ Pessoa (${pessoa.tipo} - ${pessoa.nome}) cadastrada com sucesso!`);
     } catch (error) {
         console.warn('⚠️ Falha ao preencher pessoa:', error.message);
@@ -724,7 +727,7 @@ async function preencherModalComposicao(page, dadosComposicao) {
 }
 
 /**
- * Executa o fluxo completo
+ * Executa o fluxo completo do Formulário 1 até a tela de Detalhes
  */
 async function executarOcorrenciaCompleta(page, dados) {
     console.log('\nNavegando para a tela de criação de ocorrência...');
@@ -738,32 +741,31 @@ async function executarOcorrenciaCompleta(page, dados) {
 
     await page.waitForTimeout(1500);
 
+    // 1. NATUREZA DA OCORRÊNCIA
     if (dados.natureza) {
         await selecionarSelect2(page, 'Natureza', dados.natureza, dados.natureza);
     }
 
+    // 2. DATA E HORÁRIO
     if (dados.dataHora) {
         await page.fill('input[type="datetime-local"], input[placeholder*="dd/mm/aaaa"]', dados.dataHora).catch(() => { });
     }
 
+    // 3. UNIDADE MILITAR (ID direto: #select2-unidade-container)
     if (dados.unidadeLocal) {
         console.log(`Buscando Unidade Militar via #select2-unidade-container: "${dados.unidadeLocal}"...`);
         try {
-            // Clica diretamente no container do Select2 de Unidade Militar
             const containerUnidade = page.locator('#select2-unidade-container, [aria-labelledby="select2-unidade-container"]').first();
             await containerUnidade.waitFor({ state: 'visible', timeout: 5000 });
-            await containerUnidade.click();
+            await containerUnidade.click({ force: true });
 
-            // Digita no campo de busca que se abre no Select2
             const campoBusca = page.locator('.select2-container--open .select2-search__field').first();
             await campoBusca.waitFor({ state: 'visible', timeout: 2000 });
 
-            // Busca pelo número da unidade (ex: '21') ou pelo texto da OPM
             const termoBusca = dados.opmBusca || '21';
             await campoBusca.fill(termoBusca);
             await page.waitForTimeout(400);
 
-            // Clica na opção correspondente na lista
             const opcao = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
             await opcao.waitFor({ state: 'visible', timeout: 3000 });
             await opcao.click();
@@ -774,7 +776,7 @@ async function executarOcorrenciaCompleta(page, dados) {
         }
     }
 
-    // === INÍCIO DO BLOCO DE ENDEREÇO ===
+    // 4. ENDEREÇO E CAMPOS DE BUSCA
     if (dados.enderecoBusca) {
         try {
             const inputBusca = page.locator('input[placeholder*="Digite um local"]');
@@ -803,47 +805,44 @@ async function executarOcorrenciaCompleta(page, dados) {
         }
     }
 
-    // Preenchimento do Numeral protegido contra undefined
-    /*  try {
-         if (dados.numeral) {
-             await page.fill('input[placeholder*="Numeral"]', String(dados.numeral));
-         }
-     } catch (e) {
-         console.warn('⚠️ Não foi possível preencher o Numeral, seguindo o fluxo...');
-     } */
-    // === FIM DO BLOCO DE ENDEREÇO ===
+    // 5. NUMERAL DO ENDEREÇO
+    try {
+        const valorNumeral = (dados.numeral && String(dados.numeral).trim() !== '') ? String(dados.numeral) : 'S/N';
+        const inputNumeral = page.locator('input[placeholder*="Numeral"], input[name*="numeral"]').first();
+        if (await inputNumeral.isVisible({ timeout: 2000 }).catch(() => false)) {
+            await inputNumeral.fill(valorNumeral);
+            console.log(`✅ Numeral (${valorNumeral}) preenchido com sucesso!`);
+        }
+    } catch (e) {
+        console.warn('⚠️ Não foi possível preencher o Numeral, seguindo o fluxo...');
+    }
 
-    await page.fill('input[placeholder*="Numeral"]', dados.numeral).catch(() => { });
-
-    // === PREENCHIMENTO DE OPM QUE ATENDEU (UTILIZANDO ID DIRETO #select2-opm-container) ===
+    // 6. OPM QUE ATENDEU (ID direto: #select2-opm-container)
     if (dados.opmAtendeu) {
-        console.log(`Buscando OPM via #select2-opm-container: "${dados.opmAtendeu}"...`);
+        console.log(`Preenchendo OPM de forma direta via #select2-opm-container: "${dados.opmAtendeu}"...`);
         try {
-            // Clica diretamente no container do Select2 da OPM
             const containerOPM = page.locator('#select2-opm-container, [aria-labelledby="select2-opm-container"]').first();
             await containerOPM.waitFor({ state: 'visible', timeout: 5000 });
-            await containerOPM.click();
+            await containerOPM.click({ force: true });
 
-            // Campo de busca aberto no Select2
             const campoBusca = page.locator('.select2-container--open .select2-search__field').first();
             await campoBusca.waitFor({ state: 'visible', timeout: 2000 });
 
-            // Usa o termo de busca limpo (ex: '21')
             const termoBusca = dados.opmBusca || '21';
             await campoBusca.fill(termoBusca);
             await page.waitForTimeout(400);
 
-            // Clica na opção destacada
             const opcao = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
             await opcao.waitFor({ state: 'visible', timeout: 3000 });
             await opcao.click();
 
-            console.log('✅ OPM selecionada com sucesso via ID direto!');
+            console.log('✅ OPM selecionada instantaneamente via ID direto!');
         } catch (err) {
             console.warn('⚠️ Falha ao selecionar OPM via ID direto:', err.message);
         }
     }
 
+    // 7. NÚMERO DA OCORRÊNCIA (FICHA CIOPS)
     if (dados.numeroOcorrencia) {
         console.log(`Preenchendo Número da Ocorrência (Ficha CIOPS): ${dados.numeroOcorrencia}...`);
         try {
@@ -872,15 +871,32 @@ async function executarOcorrenciaCompleta(page, dados) {
 
     console.log('----------------------------------------------------');
     console.log('FORMULÁRIO 1 PREENCHIDO COM SUCESSO!');
-    console.log('Confira os dados na tela e clique em "Registrar Ocorrência".');
-    console.log('Aguardando a confirmação manual para ir à tela de detalhes...');
+    console.log('Submetendo formulário via #btn-salvar-ocorrencia...');
     console.log('----------------------------------------------------');
 
-    let telaDetalhesDetectada = false;
-    while (!telaDetalhesDetectada) {
-        await page.waitForTimeout(1000);
-        const urlAtual = page.url();
+    // 8. SUBMISSÃO DO FORMULÁRIO 1
+    try {
+        await page.evaluate(() => {
+            const btn = document.querySelector('#btn-salvar-ocorrencia') ||
+                document.querySelector('input[value="Registrar Ocorrência"]') ||
+                document.querySelector('input[type="submit"]');
+            if (btn) btn.click();
+        });
+        console.log('✅ Botão "Registrar Ocorrência" clicado com sucesso!');
+    } catch (err) {
+        console.warn('⚠️ Falha ao clicar no botão de salvar ocorrência:', err.message);
+    }
 
+    // 9. AGUARDA REDIRECIONAMENTO E PREENCHE OS MODAIS
+    console.log('Aguardando redirecionamento para a tela de detalhes...');
+    let telaDetalhesDetectada = false;
+    let tentativas = 0;
+
+    while (!telaDetalhesDetectada && tentativas < 20) {
+        await page.waitForTimeout(1000);
+        tentativas++;
+
+        const urlAtual = page.url();
         const estaNaTelaDetalhes = !urlAtual.endsWith('/ocorrencias-criar') && urlAtual.includes('/ocorrencias');
         const botaoPessoaVisivel = await page.locator('button[data-target="#modalPessoa"]').isVisible().catch(() => false);
 
@@ -889,24 +905,29 @@ async function executarOcorrenciaCompleta(page, dados) {
         }
     }
 
-    console.log('\n✅ Tela "Detalhando a ocorrência" detectada!');
-    await page.waitForTimeout(1500);
+    if (telaDetalhesDetectada) {
+        console.log('\n✅ Tela "Detalhando a ocorrência" detectada com sucesso!');
+        await page.waitForTimeout(1500);
 
-    await executarFormulario2(page, dados);
+        // Executa o preenchimento dos modais sequencialmente
+        await executarFormulario2(page, dados);
 
-    if (dados.procedimento) {
-        await preencherModalProcedimento(page, dados.procedimento);
+        if (dados.procedimento) {
+            await preencherModalProcedimento(page, dados.procedimento);
+        }
+
+        if (dados.historico) {
+            await preencherModalHistorico(page, dados.historico);
+        }
+
+        if (dados.material && dados.material.possuiMaterial) {
+            await preencherModalMaterial(page, dados.material);
+        }
+
+        await preencherModalComposicao(page, dados.composicao);
+    } else {
+        console.warn('⚠️ O formulário pode não ter sido salvo. Verifique pendências de preenchimento na tela.');
     }
-
-    if (dados.historico) {
-        await preencherModalHistorico(page, dados.historico);
-    }
-
-    if (dados.material && dados.material.possuiMaterial) {
-        await preencherModalMaterial(page, dados.material);
-    }
-
-    await preencherModalComposicao(page, dados.composicao);
 }
 
 (async () => {

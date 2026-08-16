@@ -271,7 +271,7 @@ function ehNomeValido(nome) {
 }
 
 /**
- * Extrai a lista de pessoas qualificadas no relatório (Vítima, Acusado, Infrator, etc.)
+ * Extrai a lista de pessoas qualificadas no relatório (Vítima, Infrator, Testemunha, etc.)
  */
 function extrairPessoas(textoLimpo) {
     const textoSanitizado = textoLimpo.replace(/\*/g, '');
@@ -296,24 +296,30 @@ function extrairPessoas(textoLimpo) {
         const nascimentoBruto = match[3] ? match[3].trim() : '';
         const maeBruta = match[4] ? match[4].trim() : '';
 
-        // Aplica a validação de nome válido
+        // Aplica a validação de nome de pessoa válido
         if (ehNomeValido(nomePessoa)) {
-            let papelMapeado = 'Vítima';
+            // 1. Mapeamento para as opções exatas da caixa de seleção do SIPOM
+            let papelMapeado = 'Vitima';
             const papelUpper = papelBruto.toUpperCase();
 
-            if (/ACUSADO|PRESO|SUSPEITO|AUTOR/i.test(papelUpper)) {
-                papelMapeado = 'Acusado';
-            } else if (/INFRATOR/i.test(papelUpper)) {
+            if (/ACUSADO|PRESO|SUSPEITO|AUTOR|INFRATOR/i.test(papelUpper)) {
                 papelMapeado = 'Infrator';
             } else if (/TESTEMUNHA/i.test(papelUpper)) {
                 papelMapeado = 'Testemunha';
+            } else if (/V[IÍ]TIMA/i.test(papelUpper)) {
+                papelMapeado = 'Vitima';
             }
 
+            // 2. Extração limpa de Data de Nascimento (filtra apenas formatos DD/MM/AAAA)
             let nascimento = '';
-            if (nascimentoBruto && !/N[ÃA]O\s+INFORMADO/i.test(nascimentoBruto)) {
-                nascimento = nascimentoBruto;
+            if (nascimentoBruto) {
+                const matchData = nascimentoBruto.match(/\d{2}\/\d{2}\/\d{4}/);
+                if (matchData) {
+                    nascimento = matchData[0];
+                }
             }
 
+            // 3. Validação do Nome da Mãe
             let mae = '';
             if (maeBruta && ehNomeValido(maeBruta)) {
                 mae = maeBruta;
