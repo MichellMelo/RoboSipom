@@ -210,17 +210,14 @@ function normalizarTexto(texto) {
 }
 
 /**
- * Extrai envolvidos e qualificações (Pessoas) sem depender de delimitadores rígidos
+ * Extrai envolvidos e qualificações (Pessoas)
  */
 function extrairPessoas(textoLimpo) {
     const pessoas = [];
-
-    // Limpeza profunda de caracteres ocultos de WhatsApp/Markdown
     const textoSanitizado = textoLimpo
         .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
         .replace(/\*/g, '');
 
-    // Isola tudo a partir de "Qualificação das Partes:" até a linha "Delegado" ou "Material"
     const inicioMatch = textoSanitizado.match(/Qualifica[çc][ãa]o\s+das\s+Partes:\s*([\s\S]*)/i);
     if (!inicioMatch) {
         return [{
@@ -234,9 +231,8 @@ function extrairPessoas(textoLimpo) {
         }];
     }
 
-    // Corta o texto antes da seção do Delegado ou Material
     let blocoTexto = inicioMatch[1];
-    const fimMatch = blocoTexto.match(/([\s\S]*?)(?=\n\s*(?:Delegad[oa]|Material|Relato|Capitula[çc][ãa]o|N[°º]?\s*do\s*Mandado)|$)/i);
+    const fimMatch = blocoTexto.match(/([\s\S]*?)(?=\n\s*(?:Delegad[oa]|Material|Relato|Hist[óo]rico|Capitula[çc][ãa]o|N[°º]?\s*do\s*Mandado)|$)/i);
     if (fimMatch) {
         blocoTexto = fimMatch[1];
     }
@@ -248,7 +244,6 @@ function extrairPessoas(textoLimpo) {
         const textoLinha = linha.trim();
         if (!textoLinha) continue;
 
-        // Identifica início de novo indivíduo (Acusado, Vítima, Testemunha, etc.)
         const papelMatch = textoLinha.match(/^(Acusado|Infrator|Preso|Suspeito|Autor|V[ií]tima|Testemunha|Tio|Tia):\s*(.*)/i);
 
         if (papelMatch) {
@@ -272,15 +267,12 @@ function extrairPessoas(textoLimpo) {
                 mae: ''
             };
         } else if (pessoaAtual) {
-            // Captura CPF
             const cpfMatch = textoLinha.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/);
             if (cpfMatch) pessoaAtual.cpf = cpfMatch[0].replace(/\D/g, '');
 
-            // Captura Nascimento
             const nascMatch = textoLinha.match(/(?:Data\s+de\s+Nascimento|Nascimento|Nasc):\s*(\d{2}\/\d{2}\/\d{4})/i);
             if (nascMatch) pessoaAtual.nascimento = nascMatch[1];
 
-            // Captura Mãe
             const maeMatch = textoLinha.match(/(?:M[ãa]e):\s*([^\n]+)/i);
             if (maeMatch) pessoaAtual.mae = maeMatch[1].trim();
         }
@@ -304,8 +296,6 @@ function extrairPessoas(textoLimpo) {
  */
 function extrairProcedimento(textoLimpo) {
     const textoSanitizado = textoLimpo.replace(/\*/g, '');
-
-    // Busca a linha do procedimento (Ellen Albuquerque de Oliveira / 10° Distrito Policial / B.O. 110-6903/2026)
     const blocoMatch = textoSanitizado.match(/Delegad[oa](?:\/Delegacia\/Procedimento)?:\s*\n?\s*([^\n]+)/i);
 
     if (blocoMatch) {
@@ -314,35 +304,41 @@ function extrairProcedimento(textoLimpo) {
 
         if (partes.length >= 3) {
             const delegado = partes[0];
-            const delegacia = partes[1];
-
-            // Reagrupa a parte do procedimento caso haja mais de 3 barras na linha
+            const delegaciaTexto = partes[1];
             const procTexto = partes.slice(2).join('/');
 
-            // Captura tipo (BO, IP, TCO), o número (ex: 110-6903) e o ano (ex: 2026)
-            const procMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO)?\s*N?[°º]?\s*([\d\s-]+)\/(\d{4})/i);
+            const procMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO)?\s*N?[°º]?\s*(\d+)-([\d\s]+)\/(\d{4})/i);
 
             let procedimentoNome = 'Boletim de Ocorrência - BO';
-            let numero = '';
-            let ano = new Date().getFullYear().toString();
+            let codigoDelegacia = '110';
+            let numeroBo = '';
+            let ano = '2026';
 
             if (procMatch) {
                 const tipoSigla = (procMatch[1] || '').toUpperCase();
-                numero = procMatch[2].replace(/\s+/g, '').trim();
-                ano = procMatch[3].trim();
+                codigoDelegacia = procMatch[2].trim();
+                numeroBo = procMatch[3].replace(/\s+/g, '').trim();
+                ano = procMatch[4].trim();
 
                 if (tipoSigla.includes('I.P') || tipoSigla.includes('IP')) {
                     procedimentoNome = 'Inquerito Policial - IP';
                 } else if (tipoSigla.includes('TCO')) {
                     procedimentoNome = 'Termo Circunstanciado de Ocorrência - TCO';
                 }
+            } else {
+                const procSimpleMatch = procTexto.match(/(B\.?O\.?|I\.?P\.?|TCO)?\s*N?[°º]?\s*([\d\s-]+)\/(\d{4})/i);
+                if (procSimpleMatch) {
+                    numeroBo = procSimpleMatch[2].replace(/\s+/g, '').trim();
+                    ano = procSimpleMatch[3].trim();
+                }
             }
 
             return {
                 delegado: delegado,
-                delegacia: delegacia,
+                delegaciaTexto: delegaciaTexto,
+                codigoDelegacia: codigoDelegacia,
                 procedimento: procedimentoNome,
-                numero: numero,
+                numero: numeroBo,
                 ano: ano
             };
         }
@@ -350,15 +346,16 @@ function extrairProcedimento(textoLimpo) {
 
     return {
         delegado: '',
-        delegacia: '10° Distrito Policial',
+        delegaciaTexto: '10° Distrito Policial',
+        codigoDelegacia: '110',
         procedimento: 'Boletim de Ocorrência - BO',
         numero: '',
-        ano: new Date().getFullYear().toString()
+        ano: '2026'
     };
 }
 
 /**
- * Extrai o texto do Histórico
+ * Extrai o texto do Histórico/Relato
  */
 function extrairHistorico(textoLimpo) {
     const textoSanitizado = textoLimpo
@@ -370,7 +367,7 @@ function extrairHistorico(textoLimpo) {
 }
 
 /**
- * Extrai e classifica o tipo de material e sub-campos específicos (como Drogas)
+ * Extrai e classifica múltiplos materiais do relatório (Drogas, Dinheiro, Armas, etc.)
  */
 function extrairMaterial(textoLimpo) {
     const textoSanitizado = textoLimpo
@@ -378,63 +375,70 @@ function extrairMaterial(textoLimpo) {
         .replace(/\*/g, '');
 
     const match = textoSanitizado.match(/Material\s*(?:apreendido\/recuperado)?:\s*([^\n]+)/i);
-
-    if (match) {
-        const descricao = match[1].trim();
-
-        if (/^(S\/A|N\/A|SEM MATERIAL|NENHUM|NADA)$/i.test(descricao)) {
-            return { possuiMaterial: false, tipoLabel: '', descricao: descricao };
-        }
-
-        let tipoLabel = 'Outros';
-        let subTipoDroga = '';
-        let quantidadeDroga = '1';
-
-        const descUpper = descricao.toUpperCase();
-
-        if (/DROGA|MACONHA|COCA[IÍ]NA|CRACK|SKANK|SKUNK|HAXIXE|ENTORPECENTE/i.test(descUpper)) {
-            tipoLabel = 'Droga';
-
-            // Identifica o subtipo específico da droga
-            if (/COCA[IÍ]NA/i.test(descUpper)) {
-                subTipoDroga = 'Cocaína - gramas (g)';
-            } else if (/CRACK/i.test(descUpper)) {
-                subTipoDroga = 'Crack - gramas (g)';
-            } else if (/SKANK|SKUNK/i.test(descUpper)) {
-                subTipoDroga = 'Skank - gramas (g)';
-            } else {
-                subTipoDroga = 'Maconha - gramas (g)'; // Padrão caso não especifique ou seja maconha
-            }
-
-            // Extrai a quantidade numérica (ex: 50g, 50 gramas, 100 g)
-            const qtdMatch = descUpper.match(/(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR)/i);
-            if (qtdMatch) {
-                quantidadeDroga = qtdMatch[1].replace(',', '.');
-            }
-        } else if (/REV[ÓO]LVER|PISTOLA|ESPINGARDA|ARMA|RIFLE|FUZIL|CARABINA|GARUCHA/i.test(descUpper)) {
-            tipoLabel = 'Arma';
-        } else if (/MUNI[ÇC][ÃA]O|CARTUCHO|PROJ[ÉE]TIL|MUNICOES/i.test(descUpper)) {
-            tipoLabel = 'Munição';
-        } else if (/CELULAR|TELEFONE|SMARTPHONE|IPHONE|SAMSUNG|MOTOROLA/i.test(descUpper)) {
-            tipoLabel = 'Celular';
-        } else if (/DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR/i.test(descUpper)) {
-            tipoLabel = 'Dinheiro';
-        } else if (/VE[IÍ]CULO|CARRO|MOTO|MOTOCICLETA|AUTOM[ÓO]VEL|CAMIONETA/i.test(descUpper)) {
-            tipoLabel = 'Veículo';
-        }
-
-        return {
-            possuiMaterial: true,
-            tipoLabel: tipoLabel,
-            subTipoDroga: subTipoDroga,
-            quantidadeDroga: quantidadeDroga,
-            descricao: descricao
-        };
+    if (!match) {
+        return { possuiMaterial: false, lista: [] };
     }
 
-    return { possuiMaterial: false, tipoLabel: '', descricao: 'S/A' };
+    const textoMaterial = match[1].trim();
+    if (/^(S\/A|N\/A|SEM MATERIAL|NENHUM|NADA)$/i.test(textoMaterial)) {
+        return { possuiMaterial: false, lista: [] };
+    }
+
+    const listaMateriais = [];
+
+    // 1. Busca por Drogas
+    const regexDroga = /(COCA[IÍ]NA|CRACK|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE)[^\d]*(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR)?/gi;
+    let matchDroga;
+    while ((matchDroga = regexDroga.exec(textoMaterial)) !== null) {
+        const nomeSubstancia = matchDroga[1].toUpperCase();
+        const quantidade = matchDroga[2].replace(',', '.');
+
+        let subTipoDroga = 'Maconha - gramas (g)';
+        if (/COCA[IÍ]NA/i.test(nomeSubstancia)) subTipoDroga = 'Cocaína - gramas (g)';
+        else if (/CRACK/i.test(nomeSubstancia)) subTipoDroga = 'Crack - gramas (g)';
+        else if (/SKANK|SKUNK/i.test(nomeSubstancia)) subTipoDroga = 'Skank - gramas (g)';
+
+        listaMateriais.push({
+            tipoLabel: 'Droga',
+            subTipoDroga: subTipoDroga,
+            quantidadeDroga: quantidade
+        });
+    }
+
+    // 2. Busca por Dinheiro
+    const regexDinheiro = /(?:DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR)[^\d]*(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/gi;
+    let matchDinheiro = regexDinheiro.exec(textoMaterial);
+    if (matchDinheiro) {
+        let v = matchDinheiro[1].replace(/\./g, '');
+        if (!v.includes(',')) v += ',00';
+        listaMateriais.push({
+            tipoLabel: 'Dinheiro',
+            valorDinheiro: v
+        });
+    }
+
+    // 3. Busca por Outros Tipos
+    if (listaMateriais.length === 0) {
+        let tipoLabel = 'Outros';
+        const descUpper = textoMaterial.toUpperCase();
+
+        if (/REV[ÓO]LVER|PISTOLA|ESPINGARDA|ARMA|RIFLE|FUZIL/i.test(descUpper)) tipoLabel = 'Arma';
+        else if (/MUNI[ÇC][ÃA]O|CARTUCHO|PROJ[ÉE]TIL/i.test(descUpper)) tipoLabel = 'Munição';
+        else if (/CELULAR|TELEFONE|SMARTPHONE|IPHONE/i.test(descUpper)) tipoLabel = 'Celular';
+        else if (/VE[IÍ]CULO|CARRO|MOTO|AUTOM[ÓO]VEL/i.test(descUpper)) tipoLabel = 'Veículo';
+
+        listaMateriais.push({ tipoLabel: tipoLabel });
+    }
+
+    return {
+        possuiMaterial: listaMateriais.length > 0,
+        lista: listaMateriais
+    };
 }
 
+/**
+ * Função principal exportada do parser
+ */
 function extrairDadosFormulario1(textoRelatorio) {
     if (!textoRelatorio || typeof textoRelatorio !== 'string') {
         throw new Error('O texto do relatório fornecido é inválido.');
@@ -476,7 +480,7 @@ function extrairDadosFormulario1(textoRelatorio) {
         if (partes[2]) bairro = partes[2];
     }
 
-    let opmCalculada = '21º BPM';
+    let opmCalculada = '1ªCIA/21ºBPM';
     const bairroChave = normalizarTexto(bairro);
     if (MAPA_BAIRROS_OPM[bairroChave]) {
         opmCalculada = MAPA_BAIRROS_OPM[bairroChave];
@@ -505,5 +509,5 @@ module.exports = {
     extrairPessoas,
     extrairProcedimento,
     extrairHistorico,
-    extrairMaterial,
+    extrairMaterial
 };
