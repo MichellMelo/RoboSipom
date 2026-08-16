@@ -1,43 +1,38 @@
 RELATÓRIO DE OCORRÊNCIA
 
 Ficha da CIOPS:
-M20260376912
+M20260379845
 
-Natureza da Ocorrência: CRIME DE VIOLENCIA DOMESTICA
+Natureza da Ocorrência: RECUPERAÇÃO DE VEÍCULOS
 
-Data: 19/05/2026
+Data: 21/05/2026
 
 Horário:
-Inicial: 22h15min
-Final: 04h00min
+Inicial: 18h40min
+Final: 01h17min
 
 Endereço:
-Rua Umarizeiras, 1868, Parque Santa Rosa, Fortaleza
+Rua Luiz Gonzaga dos Santos, S/N, Pajuçara, Maracanaú
 
 OPM/VTR/:
 21° BPM
-1ª Cia - Vtr 211052
+Composição Vtr
 
 Composição:
-CMT: Sd PM 36137 Josef M.F.: Não informado
-MOT: Sd PM 39097 Gonçalves M.F.: Não informado
-PAT: Sd PM 38433 Webster M.F.: Não informado
-PAT: Sd PM 38449 Ingrid M.F.: Não informado
+CMT: 3° Sgt PM 23205 Rinaldo M.F.: 302.062-1-5
+MOT: Sd PM 36276 Gabriel Oliveira M.F.: 300.201-2-X
+PAT: Sd PM 35730 Davi Silva M.F.: 300.197-8-4
 
 Qualificação das Partes:
-Vítima: Mirineide Silva Felix
-Nascimento: 25/04/1985
-Mãe: Não informado
-
-Acusado: Anália Lemos da Silva
-Nascimento: 15/03/1988
+Vítima: Não identificada
+Nascimento: Não informado
 Mãe: Não informado
 
 Delegado/Delegacia/Procedimento:
-Alessandra Albuquerque Guedes / Delegacia de Defesa da Mulher (DDM) / Inquerito Policial - IP 303-766/2026
+José Carlos Alan Pereira / Delegacia Metropolitana de Maracanaú (DMM) / Boletim de Ocorrência - BO 939-14505/2026
 
 Material:
-S/A
+Veículo: Motocicleta Honda CG Start 150, cor vermelha, placa PNG0F48 (recuperada)
 
 Histórico:
-A composição deslocou-se até o endereço indicado, onde encontrou a vítima, Sra. Mirineide Silva Felix, ao solo em frente à residência, apresentando dificuldades de comunicação. O SAMU foi acionado, comparecendo ao local a ambulância US 19 com os socorristas Soares e Robério, que prestaram o atendimento inicial e conduziram a vítima ao Instituto José Frota (IJF). Nas proximidades, a equipe localizou a suspeita, identificada como Anália Lemos da Silva. A acusada confessou ter agredido a vítima e informou que se tratava de sua ex-companheira. Diante dos fatos, a acusada foi conduzida à Delegacia de Defesa da Mulher (DDM), onde a autoridade policial lavrou o Inquérito Policial nº 303-766/2026. Posteriormente, a acusada foi encaminhada à PEFOCE/IML para exame de corpo de delito e entregue na Delegacia de Capturas e Policiamento Especializado (DECAP).
+A composição foi acionada por populares informando sobre a localização de uma motocicleta Honda CG Start 150, de cor vermelha e placa PNG0F48, a qual havia sido roubada e estava sendo rastreada na Rua Luiz Gonzaga dos Santos, S/N, no bairro Pajuçara. A equipe deslocou-se imediatamente ao endereço e localizou o veículo abandonado. Diante dos fatos, o veículo foi recolhido e apresentado na Delegacia Metropolitana de Maracanaú (DMM) ao delegado plantonista José Carlos Alan Pereira, onde foi lavrado o Boletim de Ocorrência nº 939-14505/2026 para a realização dos procedimentos de apreensão e restituição ao proprietário.

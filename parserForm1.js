@@ -210,6 +210,34 @@ function normalizarTexto(texto) {
 }
 
 /**
+ * Trata o texto do Batalhão/OPM para busca limpa no Select2
+ */
+function extrairOPM(textoLimpo) {
+    const match = textoLimpo.match(/OPM\/VTR\/?:\s*\n?\s*([^\n]+)/i);
+    let opmTexto = '21° BPM';
+    let opmBusca = '21';
+
+    if (match) {
+        const linhaOpm = match[1].trim();
+        const matchNum = linhaOpm.match(/\d+/);
+        if (matchNum) {
+            opmBusca = matchNum[0];
+        }
+
+        // Remove referências de Cia para manter apenas o Batalhão na busca do Select2
+        if (linhaOpm.toUpperCase().includes('BPM')) {
+            const partes = linhaOpm.split(/[-/]/);
+            const parteBpm = partes.find(p => p.toUpperCase().includes('BPM')) || linhaOpm;
+            opmTexto = parteBpm.trim();
+        } else {
+            opmTexto = linhaOpm;
+        }
+    }
+
+    return { opmTexto, opmBusca };
+}
+
+/**
  * Extrai envolvidos e qualificações (Pessoas)
  */
 function extrairPessoas(textoLimpo) {

@@ -109,7 +109,7 @@ async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
 }
 
 /**
- * Preenche o modal de Adicionar Pessoa (Formulário 2)
+ * Preenche o modal de Adicionar Pessoa e confirma no elemento #btn-salvar-pessoa
  */
 async function preencherModalPessoa(page, pessoa) {
     try {
@@ -215,14 +215,23 @@ async function preencherModalPessoa(page, pessoa) {
         const selectMorte = page.locator('#modalPessoa select[name="morte"], #modalPessoa select').last();
         await selectMorte.selectOption({ label: pessoa.morte || 'NÃO' }).catch(() => { });
 
-        await page.waitForTimeout(600);
+        await page.waitForTimeout(400);
 
-        console.log('Confirmando inclusão da pessoa...');
-        const btnAdicionar = page.locator('#modalPessoa button:has-text("Adicionar")').first();
-        await btnAdicionar.click();
+        // Submissão direta e segura usando o seletor exato #btn-salvar-pessoa
+        console.log('Confirmando gravação da pessoa em #btn-salvar-pessoa...');
+        await page.evaluate(() => {
+            const btn = document.querySelector('#btn-salvar-pessoa') ||
+                document.querySelector('#modalPessoa button[type="submit"]') ||
+                document.querySelector('#modalPessoa button:has-text("Adicionar")');
+            if (btn) btn.click();
+        });
+
+        // Aguarda o fechamento do modal antes de abrir o próximo
+        console.log('Aguardando gravação e fechamento do modal de Pessoa...');
+        await modalPessoa.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
         await page.waitForTimeout(1000);
 
-        console.log(`✅ Pessoa (${pessoa.tipo} - ${pessoa.nome}) adicionada com sucesso!`);
+        console.log(`✅ Pessoa (${pessoa.tipo} - ${pessoa.nome}) cadastrada com sucesso!`);
     } catch (error) {
         console.warn('⚠️ Falha ao preencher pessoa:', error.message);
         await page.keyboard.press('Escape').catch(() => { });
@@ -356,7 +365,21 @@ async function preencherModalProcedimento(page, procedimento) {
             await inputAno.dispatchEvent('change');
         }
 
-        console.log('✅ Modal Procedimento preenchido com sucesso!');
+        // Submissão do Modal de Procedimento Policial via #btn-salvar-procedimento
+        console.log('Confirmando gravação do Procedimento em #btn-salvar-procedimento...');
+        await page.evaluate(() => {
+            const btn = document.querySelector('#btn-salvar-procedimento') ||
+                document.querySelector('#modalProcedimento input[type="submit"]') ||
+                document.querySelector('#modalProcedimento button:has-text("Salvar")');
+            if (btn) btn.click();
+        });
+
+        // Aguarda o modal sumir para garantir a gravação e permitir o próximo passo
+        console.log('Aguardando gravação e fechamento do modal de Procedimento...');
+        await modalProcedimento.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
+        await page.waitForTimeout(1000);
+
+        console.log('✅ Modal Procedimento preenchido e gravado com sucesso!');
     } catch (error) {
         console.warn('⚠️ Falha ao preencher Modal Procedimento:', error.message);
     }
@@ -700,7 +723,31 @@ async function executarOcorrenciaCompleta(page, dados) {
     }
 
     if (dados.unidadeLocal) {
-        await selecionarSelect2(page, 'Unidade Militar', '21', dados.unidadeLocal);
+        console.log(`Buscando Unidade Militar via #select2-unidade-container: "${dados.unidadeLocal}"...`);
+        try {
+            // Clica diretamente no container do Select2 de Unidade Militar
+            const containerUnidade = page.locator('#select2-unidade-container, [aria-labelledby="select2-unidade-container"]').first();
+            await containerUnidade.waitFor({ state: 'visible', timeout: 5000 });
+            await containerUnidade.click();
+
+            // Digita no campo de busca que se abre no Select2
+            const campoBusca = page.locator('.select2-container--open .select2-search__field').first();
+            await campoBusca.waitFor({ state: 'visible', timeout: 2000 });
+
+            // Busca pelo número da unidade (ex: '21') ou pelo texto da OPM
+            const termoBusca = dados.opmBusca || '21';
+            await campoBusca.fill(termoBusca);
+            await page.waitForTimeout(400);
+
+            // Clica na opção correspondente na lista
+            const opcao = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
+            await opcao.waitFor({ state: 'visible', timeout: 3000 });
+            await opcao.click();
+
+            console.log('✅ Unidade Militar selecionada com sucesso via ID direto!');
+        } catch (err) {
+            console.warn('⚠️ Falha ao selecionar Unidade Militar via ID direto:', err.message);
+        }
     }
 
     // === INÍCIO DO BLOCO DE ENDEREÇO ===
@@ -733,19 +780,44 @@ async function executarOcorrenciaCompleta(page, dados) {
     }
 
     // Preenchimento do Numeral protegido contra undefined
-    try {
-        if (dados.numeral) {
-            await page.fill('input[placeholder*="Numeral"]', String(dados.numeral));
-        }
-    } catch (e) {
-        console.warn('⚠️ Não foi possível preencher o Numeral, seguindo o fluxo...');
-    }
+    /*  try {
+         if (dados.numeral) {
+             await page.fill('input[placeholder*="Numeral"]', String(dados.numeral));
+         }
+     } catch (e) {
+         console.warn('⚠️ Não foi possível preencher o Numeral, seguindo o fluxo...');
+     } */
     // === FIM DO BLOCO DE ENDEREÇO ===
 
     await page.fill('input[placeholder*="Numeral"]', dados.numeral).catch(() => { });
 
+    // === PREENCHIMENTO DE OPM QUE ATENDEU (UTILIZANDO ID DIRETO #select2-opm-container) ===
     if (dados.opmAtendeu) {
-        await selecionarSelect2(page, 'OPM', '21', dados.opmAtendeu);
+        console.log(`Buscando OPM via #select2-opm-container: "${dados.opmAtendeu}"...`);
+        try {
+            // Clica diretamente no container do Select2 da OPM
+            const containerOPM = page.locator('#select2-opm-container, [aria-labelledby="select2-opm-container"]').first();
+            await containerOPM.waitFor({ state: 'visible', timeout: 5000 });
+            await containerOPM.click();
+
+            // Campo de busca aberto no Select2
+            const campoBusca = page.locator('.select2-container--open .select2-search__field').first();
+            await campoBusca.waitFor({ state: 'visible', timeout: 2000 });
+
+            // Usa o termo de busca limpo (ex: '21')
+            const termoBusca = dados.opmBusca || '21';
+            await campoBusca.fill(termoBusca);
+            await page.waitForTimeout(400);
+
+            // Clica na opção destacada
+            const opcao = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
+            await opcao.waitFor({ state: 'visible', timeout: 3000 });
+            await opcao.click();
+
+            console.log('✅ OPM selecionada com sucesso via ID direto!');
+        } catch (err) {
+            console.warn('⚠️ Falha ao selecionar OPM via ID direto:', err.message);
+        }
     }
 
     if (dados.numeroOcorrencia) {
