@@ -238,86 +238,103 @@ function extrairOPM(textoLimpo) {
 }
 
 /**
- * Extrai envolvidos e qualificações (Pessoas)
+ * Verifica se a string extraída representa um nome de pessoa válido
+ */
+function ehNomeValido(nome) {
+    if (!nome) return false;
+    const nomeLimpo = nome.trim().toUpperCase();
+
+    const termosInvalidos = [
+        'NÃO IDENTIFICADO',
+        'NAO IDENTIFICADO',
+        'NÃO INFORMADO',
+        'NAO INFORMADO',
+        'DESCONHECIDO',
+        'IGNORADO',
+        'A APURAR',
+        'S/N',
+        'SEM INFORMACAO',
+        'SEM INFORMAÇÃO'
+    ];
+
+    // Descarta se for exatamente igual a um dos termos inválidos
+    if (termosInvalidos.some(termo => nomeLimpo === termo)) {
+        return false;
+    }
+
+    // Descarta se for excessivamente curto
+    if (nomeLimpo.length < 2) {
+        return false;
+    }
+
+    return true;
+}
+
+/**
+ * Extrai a lista de pessoas qualificadas no relatório (Vítima, Acusado, Infrator, etc.)
  */
 function extrairPessoas(textoLimpo) {
+    const textoSanitizado = textoLimpo.replace(/\*/g, '');
     const pessoas = [];
-    const textoSanitizado = textoLimpo
-        .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
-        .replace(/\*/g, '');
 
-    const inicioMatch = textoSanitizado.match(/Qualifica[çc][ãa]o\s+das\s+Partes:\s*([\s\S]*)/i);
-    if (!inicioMatch) {
-        return [{
-            tipo: 'Infrator - Não identificado',
-            cpf: '',
-            sexo: '',
-            morte: 'NÃO',
-            nome: '',
-            nascimento: '',
-            mae: ''
-        }];
+    // Captura o bloco de Qualificação das Partes até a próxima seção
+    const matchBloco = textoSanitizado.match(/Qualifica[çc][ãa]o das Partes:\s*([\s\S]*?)(?=\n\s*(?:Delegad[oa]|Material|Hist[óo]rico|$))/i);
+
+    if (!matchBloco) {
+        return pessoas;
     }
 
-    let blocoTexto = inicioMatch[1];
-    const fimMatch = blocoTexto.match(/([\s\S]*?)(?=\n\s*(?:Delegad[oa]|Material|Relato|Hist[óo]rico|Capitula[çc][ãa]o|N[°º]?\s*do\s*Mandado)|$)/i);
-    if (fimMatch) {
-        blocoTexto = fimMatch[1];
-    }
+    const blocoTexto = matchBloco[1].trim();
 
-    const linhas = blocoTexto.split('\n');
-    let pessoaAtual = null;
+    // Regex para identificar blocos de pessoas: Papel: Nome \n Nascimento: Data \n Mãe: Nome
+    const regexPessoa = /(V[íi]tima|Acusado|Infrator|Preso|Suspeito|Autor|Testemunha)\s*:?\s*([^\n]+)(?:\n\s*Nascimento\s*:?\s*([^\n]+))?(?:\n\s*M[ãa]e\s*:?\s*([^\n]+))?/gi;
 
-    for (let linha of linhas) {
-        const textoLinha = linha.trim();
-        if (!textoLinha) continue;
+    let match;
+    while ((match = regexPessoa.exec(blocoTexto)) !== null) {
+        const papelBruto = match[1].trim();
+        const nomePessoa = match[2].trim();
+        const nascimentoBruto = match[3] ? match[3].trim() : '';
+        const maeBruta = match[4] ? match[4].trim() : '';
 
-        const papelMatch = textoLinha.match(/^(Acusado|Infrator|Preso|Suspeito|Autor|V[ií]tima|Testemunha|Tio|Tia):\s*(.*)/i);
+        // Aplica a validação de nome válido
+        if (ehNomeValido(nomePessoa)) {
+            let papelMapeado = 'Vítima';
+            const papelUpper = papelBruto.toUpperCase();
 
-        if (papelMatch) {
-            if (pessoaAtual) pessoas.push(pessoaAtual);
+            if (/ACUSADO|PRESO|SUSPEITO|AUTOR/i.test(papelUpper)) {
+                papelMapeado = 'Acusado';
+            } else if (/INFRATOR/i.test(papelUpper)) {
+                papelMapeado = 'Infrator';
+            } else if (/TESTEMUNHA/i.test(papelUpper)) {
+                papelMapeado = 'Testemunha';
+            }
 
-            const rotuloOriginal = papelMatch[1].toUpperCase();
-            const nomeBruto = papelMatch[2].replace(/,\s*vulgo.*$/i, '').trim();
+            let nascimento = '';
+            if (nascimentoBruto && !/N[ÃA]O\s+INFORMADO/i.test(nascimentoBruto)) {
+                nascimento = nascimentoBruto;
+            }
 
-            let tipoSipom = 'Infrator';
-            if (/V[IÍ]TIMA/i.test(rotuloOriginal)) tipoSipom = 'Vitima';
-            else if (/TESTEMUNHA/i.test(rotuloOriginal)) tipoSipom = 'Testemunha';
-            else if (/TIO|TIA/i.test(rotuloOriginal)) tipoSipom = 'Tio (a)';
+            let mae = '';
+            if (maeBruta && ehNomeValido(maeBruta)) {
+                mae = maeBruta;
+            }
 
-            pessoaAtual = {
-                tipo: tipoSipom,
-                nome: nomeBruto,
-                cpf: '',
-                sexo: 'MASCULINO',
-                morte: 'NÃO',
-                nascimento: '',
-                mae: ''
-            };
-        } else if (pessoaAtual) {
-            const cpfMatch = textoLinha.match(/\b\d{3}\.?\d{3}\.?\d{3}-?\d{2}\b/);
-            if (cpfMatch) pessoaAtual.cpf = cpfMatch[0].replace(/\D/g, '');
-
-            const nascMatch = textoLinha.match(/(?:Data\s+de\s+Nascimento|Nascimento|Nasc):\s*(\d{2}\/\d{2}\/\d{4})/i);
-            if (nascMatch) pessoaAtual.nascimento = nascMatch[1];
-
-            const maeMatch = textoLinha.match(/(?:M[ãa]e):\s*([^\n]+)/i);
-            if (maeMatch) pessoaAtual.mae = maeMatch[1].trim();
+            pessoas.push({
+                tipo: papelMapeado,
+                nome: nomePessoa,
+                nascimento: nascimento,
+                mae: mae
+            });
         }
     }
 
-    if (pessoaAtual) pessoas.push(pessoaAtual);
-
-    return pessoas.length > 0 ? pessoas : [{
-        tipo: 'Infrator - Não identificado',
-        cpf: '',
-        sexo: '',
-        morte: 'NÃO',
-        nome: '',
-        nascimento: '',
-        mae: ''
-    }];
+    return pessoas;
 }
+
+module.exports = {
+    ehNomeValido,
+    extrairPessoas
+};
 
 /**
  * Extrai e padroniza as informações do procedimento policial

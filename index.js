@@ -112,6 +112,22 @@ async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
  * Preenche o modal de Adicionar Pessoa e confirma no elemento #btn-salvar-pessoa
  */
 async function preencherModalPessoa(page, pessoa) {
+    // Trava de segurança: ignora se não houver nome válido
+    const termosInvalidos = [
+        'NÃO IDENTIFICADO',
+        'NAO IDENTIFICADO',
+        'NÃO INFORMADO',
+        'NAO INFORMADO',
+        'DESCONHECIDO',
+        'IGNORADO',
+        'A APURAR'
+    ];
+
+    if (!pessoa || !pessoa.nome || termosInvalidos.includes(pessoa.nome.trim().toUpperCase())) {
+        console.log(`\nℹ️ Pessoa ignorada (sem nome de pessoa válido): [${pessoa?.tipo || 'Pessoa'} - ${pessoa?.nome || 'N/A'}]`);
+        return;
+    }
+
     try {
         console.log(`\nAbrindo modal para pessoa: [${pessoa.tipo} - ${pessoa.nome}]...`);
 
@@ -123,6 +139,7 @@ async function preencherModalPessoa(page, pessoa) {
         await modalPessoa.waitFor({ state: 'visible', timeout: 8000 });
         await page.waitForTimeout(500);
 
+        // 1. Seleciona o tipo de envolvimento (Vítima, Acusado, Infrator, etc.)
         const selectTipo = page.locator('#modalPessoa select').first();
         await selectTipo.waitFor({ state: 'visible', timeout: 5000 });
 
@@ -144,6 +161,7 @@ async function preencherModalPessoa(page, pessoa) {
         await selectTipo.dispatchEvent('input');
         await page.waitForTimeout(300);
 
+        // 2. Preenche CPF se informado
         if (pessoa.cpf) {
             console.log(`Preenchendo CPF: ${pessoa.cpf}...`);
             const inputCPF = page.locator('#modalPessoa input[name="cpf"], #modalPessoa #cpf').first();
@@ -153,6 +171,7 @@ async function preencherModalPessoa(page, pessoa) {
             await page.waitForTimeout(1000);
         }
 
+        // 3. Preenche Nome Completo
         if (pessoa.nome) {
             console.log(`Preenchendo Nome: "${pessoa.nome}"...`);
             const inputNome = page.locator('#modalPessoa input[name="nome"]').first();
@@ -164,6 +183,7 @@ async function preencherModalPessoa(page, pessoa) {
             await inputNome.dispatchEvent('change');
         }
 
+        // 4. Seleciona Sexo se aplicável
         if (pessoa.sexo) {
             console.log(`Selecionando Sexo: ${pessoa.sexo}...`);
             const selectSexo = page.locator('#modalPessoa select[name="sexo"]').first();
@@ -173,6 +193,7 @@ async function preencherModalPessoa(page, pessoa) {
             await selectSexo.dispatchEvent('input');
         }
 
+        // 5. Preenche Data de Nascimento
         if (pessoa.nascimento) {
             console.log(`Preenchendo Data de Nascimento: ${pessoa.nascimento}...`);
             const selectorNasc = '#modalPessoa input[name="nascimento"]';
@@ -197,6 +218,7 @@ async function preencherModalPessoa(page, pessoa) {
             }, { selector: selectorNasc, valIso: dataIso, valBr: pessoa.nascimento });
         }
 
+        // 6. Preenche Nome da Mãe
         if (pessoa.mae) {
             console.log(`Preenchendo Nome da Mãe: "${pessoa.mae}"...`);
             const selectorMae = '#modalPessoa input[name="mae"]';
@@ -212,12 +234,13 @@ async function preencherModalPessoa(page, pessoa) {
             }, { selector: selectorMae, val: pessoa.mae });
         }
 
+        // 7. Campo Morte (padrão: NÃO)
         const selectMorte = page.locator('#modalPessoa select[name="morte"], #modalPessoa select').last();
         await selectMorte.selectOption({ label: pessoa.morte || 'NÃO' }).catch(() => { });
 
         await page.waitForTimeout(400);
 
-        // Submissão direta e segura usando o seletor exato #btn-salvar-pessoa
+        // 8. Submissão direta e segura via #btn-salvar-pessoa
         console.log('Confirmando gravação da pessoa em #btn-salvar-pessoa...');
         await page.evaluate(() => {
             const btn = document.querySelector('#btn-salvar-pessoa') ||
@@ -226,7 +249,7 @@ async function preencherModalPessoa(page, pessoa) {
             if (btn) btn.click();
         });
 
-        // Aguarda o fechamento do modal antes de abrir o próximo
+        // Aguarda o encerramento do modal para liberar a próxima iteração
         console.log('Aguardando gravação e fechamento do modal de Pessoa...');
         await modalPessoa.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
         await page.waitForTimeout(1000);
