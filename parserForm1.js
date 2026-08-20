@@ -337,11 +337,6 @@ function extrairPessoas(textoLimpo) {
     return pessoas;
 }
 
-module.exports = {
-    ehNomeValido,
-    extrairPessoas
-};
-
 /**
  * Extrai e padroniza as informações do procedimento policial
  */
@@ -434,15 +429,15 @@ function extrairHistorico(textoLimpo) {
 }
 
 /**
- * Extrai e classifica múltiplos materiais do relatório (Drogas, Dinheiro, Armas, etc.)
+ * Extrai a lista de materiais apreendidos (Drogas, Dinheiro e Veículos)
  */
 function extrairMaterial(textoLimpo) {
     const textoSanitizado = textoLimpo
         .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
         .replace(/\*/g, '');
 
-    // Captura o bloco da seção Material até a próxima seção (Histórico, Qualificação ou Delegado)
-    const matchBloco = textoSanitizado.match(/Material\s*:?\s*([\s\S]*?)(?=\n\s*(?:Hist[óo]rico|Relato|Delegad[oa]|Qualifica[çc][ãa]o|$))/i);
+    // Captura o bloco da seção Material até a próxima seção
+    const matchBloco = textoSanitizado.match(/Material\s*:?\s*([\s\S]*?)(?=\n\s*(?:Hist[óo]rico|Relato|Delegad[oa]|Qualifica[çc][ãa]o|Composi[çc][ãa]o|$))/i);
 
     if (!matchBloco) {
         return { possuiMaterial: false, lista: [] };
@@ -454,15 +449,17 @@ function extrairMaterial(textoLimpo) {
     }
 
     const listaMateriais = [];
-
-    // --- 1. CAPTURA DE DROGAS (Linha por linha / Item por item) ---
     const linhas = blocoMaterial.split('\n');
 
     for (let linha of linhas) {
-        const linhaUpper = linha.toUpperCase();
+        const linhaLimpa = linha.trim();
+        if (!linhaLimpa) continue;
 
-        // Verifica se a linha trata de Droga
+        const linhaUpper = linhaLimpa.toUpperCase();
+
+        // 1. EXTRAÇÃO DE DROGA (Ex: "Droga: Cocaína (9g)" ou "Cocaína: 9g")
         if (/DROGA|CRACK|COCA[IÍ]NA|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE/i.test(linhaUpper)) {
+            // Extrai a quantidade numérica (suporta gramas, g, gr, pedras, etc.)
             const matchQtd = linhaUpper.match(/(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR|PINOS|PEDRAS|SACOS)?/i);
             const quantidade = matchQtd ? matchQtd[1].replace(',', '.') : '1';
 
@@ -484,21 +481,43 @@ function extrairMaterial(textoLimpo) {
                 quantidadeDroga: quantidade
             });
         }
+
+        // 2. EXTRAÇÃO DE DINHEIRO (Ex: "Dinheiro: R$ 103,00" ou "R$ 103,00")
+        else if (/DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$/i.test(linhaUpper)) {
+            const matchVal = linhaUpper.match(/(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/i);
+            if (matchVal) {
+                let v = matchVal[1].replace(/\./g, '');
+                if (!v.includes(',')) v += ',00';
+
+                listaMateriais.push({
+                    tipoLabel: 'Dinheiro',
+                    valorDinheiro: v
+                });
+            }
+        }
+
+        // 3. EXTRAÇÃO DE VEÍCULO (Ex: "Veículo: Motocicleta... placa OHY6D19")
+        else if (/VE[IÍ]CULO|MOTO|MOTOCICLETA|CARRO|AUTOM[ÓO]VEL/i.test(linhaUpper)) {
+            const matchPlaca = linhaUpper.match(/[A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2}/i);
+
+            if (matchPlaca) {
+                const placaFormatada = matchPlaca[0].replace(/[-\s]/g, '').toUpperCase();
+
+                let situacao = 'Apreendido';
+                if (/RECUPERAD[OA]|ROUBAD[OA]|FURTAD[OA]/i.test(linhaUpper) || /RECUPERAD[OA]/i.test(textoSanitizado)) {
+                    situacao = 'Recuperado';
+                }
+
+                listaMateriais.push({
+                    tipoLabel: 'Veículo',
+                    placa: placaFormatada,
+                    situacao: situacao
+                });
+            }
+        }
     }
 
-    // --- 2. CAPTURA DE DINHEIRO ---
-    const regexDinheiro = /(?:DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$|VALOR)\s*:?\s*(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/gi;
-    let matchDinheiro = regexDinheiro.exec(blocoMaterial);
-    if (matchDinheiro) {
-        let v = matchDinheiro[1].replace(/\./g, '');
-        if (!v.includes(',')) v += ',00';
-        listaMateriais.push({
-            tipoLabel: 'Dinheiro',
-            valorDinheiro: v
-        });
-    }
-
-    // --- 3. SE NÃO CAPTUROU DROGA NEM DINHEIRO, RÓTULOS GENÉRICOS ---
+    // Fallback de segurança se não reconheceu padrões específicos
     if (listaMateriais.length === 0) {
         let tipoLabel = 'Outros';
         const descUpper = blocoMaterial.toUpperCase();
@@ -506,13 +525,12 @@ function extrairMaterial(textoLimpo) {
         if (/REV[ÓO]LVER|PISTOLA|ESPINGARDA|ARMA|RIFLE|FUZIL/i.test(descUpper)) tipoLabel = 'Arma';
         else if (/MUNI[ÇC][ÃA]O|CARTUCHO|PROJ[ÉE]TIL/i.test(descUpper)) tipoLabel = 'Munição';
         else if (/CELULAR|TELEFONE|SMARTPHONE|IPHONE/i.test(descUpper)) tipoLabel = 'Celular';
-        else if (/VE[IÍ]CULO|CARRO|MOTO|AUTOM[ÓO]VEL/i.test(descUpper)) tipoLabel = 'Veículo';
 
         listaMateriais.push({ tipoLabel: tipoLabel });
     }
 
     return {
-        possuiMaterial: listaMateriais.length > 0,
+        possuiMaterial: true,
         lista: listaMateriais
     };
 }
@@ -662,5 +680,6 @@ module.exports = {
     extrairPessoas,
     extrairProcedimento,
     extrairHistorico,
-    extrairMaterial
+    extrairMaterial,
+    ehNomeValido
 };

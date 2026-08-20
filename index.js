@@ -6,6 +6,24 @@ const readline = require('readline');
 const { extrairDadosFormulario1 } = require('./parserForm1');
 
 /**
+ * Exibe uma pergunta no terminal e aguarda a resposta do usuário (S/N)
+ */
+function perguntarConfirmacao(pergunta) {
+    const rl = readline.createInterface({
+        input: process.stdin,
+        output: process.stdout
+    });
+
+    return new Promise(resolve => {
+        rl.question(`${pergunta} (S/N): `, resposta => {
+            rl.close();
+            const res = resposta.trim().toUpperCase();
+            resolve(res === 'S' || res === 'SIM');
+        });
+    });
+}
+
+/**
  * Interface interativa para leitura via terminal
  */
 function aguardarComando(mensagem) {
@@ -29,7 +47,7 @@ function listarArquivosRelatorio() {
 }
 
 /**
- * Permite ao usuário escolher qual relatório ler ou lê o arquivo padrão 'relatorio.txt'
+ * Permite ao usuário escolher qual relatório ler
  */
 async function selecionarEObterTextoRelatorio(nomeArquivoDefinido = null) {
     if (nomeArquivoDefinido) {
@@ -71,31 +89,27 @@ async function selecionarEObterTextoRelatorio(nomeArquivoDefinido = null) {
 }
 
 /**
- * Preenche o dropdown Select2 (jQuery) no SIPOM de forma ultrarrápida e direta
+ * Preenche o dropdown Select2 no SIPOM de forma direta
  */
 async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
     try {
         console.log(`Buscando ${labelCampo}: "${valorOpcao}"...`);
 
-        // 1. Localiza a caixa do Select2 associada ao rótulo/campo sem fazer varredura profunda no DOM
         const containerSelect2 = page.locator(`
             .form-group:has-text("${labelCampo}") .select2-container,
             label:has-text("${labelCampo}") + .select2-container,
             div:has-text("${labelCampo}") .select2-selection
         `).first();
 
-        // Aguarda a visibilidade do elemento de clique (timeout reduzido para no máximo 3s)
         await containerSelect2.waitFor({ state: 'visible', timeout: 3000 });
         await containerSelect2.click();
 
-        // 2. Localiza o input de busca aberto no Select2
         const campoBusca = page.locator('.select2-container--open .select2-search__field, input.select2-search__field').first();
 
         if (await campoBusca.isVisible({ timeout: 1000 }).catch(() => false)) {
             await campoBusca.fill(valorBusca);
         }
 
-        // 3. Clica na primeira opção que corresponda à busca sem aguardar tempos fixos
         const opcao = page.locator(`.select2-results__option:has-text("${valorOpcao}"), .select2-results__option--highlighted`).first();
         await opcao.waitFor({ state: 'visible', timeout: 3000 });
         await opcao.click();
@@ -110,10 +124,9 @@ async function selecionarSelect2(page, labelCampo, valorBusca, valorOpcao) {
 }
 
 /**
- * Preenche o modal de Adicionar Pessoa e confirma no elemento #btn-salvar-pessoa
+ * Preenche o modal de Adicionar Pessoa
  */
 async function preencherModalPessoa(page, pessoa) {
-    // Trava de segurança: ignora se não houver nome de pessoa válido
     const termosInvalidos = [
         'NÃO IDENTIFICADO',
         'NAO IDENTIFICADO',
@@ -132,7 +145,6 @@ async function preencherModalPessoa(page, pessoa) {
     try {
         console.log(`\nAbrindo modal para pessoa: [${pessoa.tipo} - ${pessoa.nome}]...`);
 
-        // 1. Abertura do modal via API do Bootstrap para evitar bloqueio por backdrop
         await page.evaluate(() => {
             if (typeof $ !== 'undefined') {
                 $('#modalPessoa').modal('show');
@@ -146,7 +158,6 @@ async function preencherModalPessoa(page, pessoa) {
         await modalPessoa.waitFor({ state: 'visible', timeout: 8000 });
         await page.waitForTimeout(400);
 
-        // 2. SELEÇÃO DO VÍNCULO NO ELEMENTO select[name="vinculo"]
         console.log(`Selecionando Vínculo no Modal: "${pessoa.tipo}"...`);
         const selectVinculo = page.locator('#modalPessoa select[name="vinculo"]').first();
         await selectVinculo.waitFor({ state: 'visible', timeout: 5000 });
@@ -155,9 +166,7 @@ async function preencherModalPessoa(page, pessoa) {
             const select = document.querySelector('#modalPessoa select[name="vinculo"]');
             if (!select) return;
 
-            // Remove acentos e padroniza para comparação insensível a maiúsculas
             const normalizar = str => str ? str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : '';
-
             const alvo = normalizar(tipoDesejado);
             const options = Array.from(select.options);
 
@@ -166,8 +175,6 @@ async function preencherModalPessoa(page, pessoa) {
 
             if (opcaoEncontrada) {
                 select.value = opcaoEncontrada.value;
-
-                // Eventos nativos e jQuery
                 select.dispatchEvent(new Event('change', { bubbles: true }));
                 select.dispatchEvent(new Event('input', { bubbles: true }));
 
@@ -179,7 +186,6 @@ async function preencherModalPessoa(page, pessoa) {
 
         await page.waitForTimeout(300);
 
-        // 3. PREENCHIMENTO DO CPF
         if (pessoa.cpf) {
             console.log(`Preenchendo CPF: ${pessoa.cpf}...`);
             const inputCPF = page.locator('#modalPessoa input[name="cpf"]').first();
@@ -189,7 +195,6 @@ async function preencherModalPessoa(page, pessoa) {
             await page.waitForTimeout(300);
         }
 
-        // 4. PREENCHIMENTO DO NOME COMPLETO
         if (pessoa.nome) {
             console.log(`Preenchendo Nome: "${pessoa.nome}"...`);
             const inputNome = page.locator('#modalPessoa input[name="nome"]').first();
@@ -201,7 +206,6 @@ async function preencherModalPessoa(page, pessoa) {
             await inputNome.dispatchEvent('change');
         }
 
-        // 5. PREENCHIMENTO DA DATA DE NASCIMENTO
         if (pessoa.nascimento) {
             console.log(`Preenchendo Data de Nascimento: ${pessoa.nascimento}...`);
             let dataIso = pessoa.nascimento;
@@ -220,7 +224,6 @@ async function preencherModalPessoa(page, pessoa) {
             }, { valIso: dataIso, valBr: pessoa.nascimento });
         }
 
-        // 6. PREENCHIMENTO DO NOME DA MÃE
         if (pessoa.mae) {
             console.log(`Preenchendo Nome da Mãe: "${pessoa.mae}"...`);
             await page.evaluate(({ val }) => {
@@ -233,7 +236,6 @@ async function preencherModalPessoa(page, pessoa) {
             }, { val: pessoa.mae });
         }
 
-        // 7. SELEÇÃO DO CAMPO MORTE (PADRÃO: NÃO)
         const selectMorte = page.locator('#modalPessoa select[name="morte"]').first();
         if (await selectMorte.isVisible({ timeout: 1000 }).catch(() => false)) {
             await selectMorte.selectOption({ label: pessoa.morte || 'NÃO' }).catch(() => { });
@@ -241,14 +243,12 @@ async function preencherModalPessoa(page, pessoa) {
 
         await page.waitForTimeout(400);
 
-        // 8. SUBMISSÃO DO MODAL VIA #btn-salvar-pessoa
         console.log('Confirmando gravação da pessoa em #btn-salvar-pessoa...');
         await page.evaluate(() => {
             const btn = document.querySelector('#btn-salvar-pessoa');
             if (btn) btn.click();
         });
 
-        // 9. AGUARDA FECHAMENTO NATIVO OU FORÇA O ENCERRAMENTO SEGURO
         await modalPessoa.waitFor({ state: 'hidden', timeout: 8000 }).catch(async () => {
             await page.evaluate(() => {
                 if (typeof $ !== 'undefined') {
@@ -311,7 +311,6 @@ async function preencherModalProcedimento(page, procedimento) {
 
         console.log('3. Selecionando Repartição de Registro: "Polícia Civil"...');
         const selectorReparticao = '#modalProcedimento select#reparticao, #modalProcedimento select[name="reparticao"]';
-
         await page.waitForSelector(selectorReparticao, { state: 'attached', timeout: 8000 });
 
         await page.evaluate((sel) => {
@@ -392,7 +391,6 @@ async function preencherModalProcedimento(page, procedimento) {
             await inputAno.dispatchEvent('change');
         }
 
-        // Submissão do Modal de Procedimento Policial via #btn-salvar-procedimento
         console.log('Confirmando gravação do Procedimento em #btn-salvar-procedimento...');
         await page.evaluate(() => {
             const btn = document.querySelector('#btn-salvar-procedimento') ||
@@ -401,7 +399,6 @@ async function preencherModalProcedimento(page, procedimento) {
             if (btn) btn.click();
         });
 
-        // Aguarda o modal sumir para garantir a gravação e permitir o próximo passo
         console.log('Aguardando gravação e fechamento do modal de Procedimento...');
         await modalProcedimento.waitFor({ state: 'hidden', timeout: 8000 }).catch(() => { });
         await page.waitForTimeout(1000);
@@ -413,7 +410,7 @@ async function preencherModalProcedimento(page, procedimento) {
 }
 
 /**
- * Preenche o modal de Histórico e sincroniza o Summernote
+ * Preenche o modal de Histórico
  */
 async function preencherModalHistorico(page, textoHistorico) {
     try {
@@ -483,7 +480,7 @@ async function preencherModalHistorico(page, textoHistorico) {
 }
 
 /**
- * Preenche o modal de Materiais e confirma no elemento input#btn-salvar-material
+ * Preenche o modal de Materiais (Suporta Drogas, Dinheiro e Veículos)
  */
 async function preencherModalMaterial(page, dadosMaterial) {
     try {
@@ -514,31 +511,83 @@ async function preencherModalMaterial(page, dadosMaterial) {
             await modalMaterial.waitFor({ state: 'visible', timeout: 8000 });
             await page.waitForTimeout(500);
 
+            // 1. SELEÇÃO DO TIPO DE MATERIAL
             const selectorTipoMaterial = '#modalMaterial select[name="material_tipo"], select[name="material_tipo"]';
             await page.waitForSelector(selectorTipoMaterial, { state: 'attached', timeout: 8000 });
 
             await page.evaluate(({ selector, labelProcurado }) => {
                 const select = document.querySelector(selector);
                 if (select) {
-                    const opt = Array.from(select.options).find(o => o.text.trim().toLowerCase() === labelProcurado.toLowerCase());
+                    const normalizar = s => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : '';
+                    const alvo = normalizar(labelProcurado);
+                    const opt = Array.from(select.options).find(o => normalizar(o.text) === alvo || normalizar(o.value) === alvo) ||
+                        Array.from(select.options).find(o => normalizar(o.text).includes(alvo) || alvo.includes(normalizar(o.text)));
+
                     if (opt) {
                         select.value = opt.value;
                         select.dispatchEvent(new Event('change', { bubbles: true }));
                         select.dispatchEvent(new Event('input', { bubbles: true }));
+                        if (typeof $ !== 'undefined') $(select).trigger('change');
                     }
                 }
             }, { selector: selectorTipoMaterial, labelProcurado: item.tipoLabel });
 
             await page.waitForTimeout(600);
 
+            // --- TRATAMENTO: VEÍCULO ---
+            if (item.tipoLabel.toLowerCase().includes('veiculo') || item.tipoLabel.toLowerCase().includes('veículo')) {
+                console.log(`Preenchendo Veículo -> Situação: "${item.situacao || 'Apreendido'}" | Placa: ${item.placa}`);
+
+                // a) Seleciona Situação ("Apreendido" ou "Recuperado")
+                await page.evaluate(({ situacaoDesejada }) => {
+                    const selects = Array.from(document.querySelectorAll('#modalMaterial select'));
+                    const selectSituacao = selects.find(s => s.name !== 'material_tipo');
+
+                    if (selectSituacao) {
+                        const normalizar = s => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : '';
+                        const alvo = normalizar(situacaoDesejada);
+                        const opt = Array.from(selectSituacao.options).find(o => normalizar(o.text) === alvo || normalizar(o.value) === alvo);
+
+                        if (opt) {
+                            selectSituacao.value = opt.value;
+                            selectSituacao.dispatchEvent(new Event('change', { bubbles: true }));
+                            selectSituacao.dispatchEvent(new Event('input', { bubbles: true }));
+                            if (typeof $ !== 'undefined') $(selectSituacao).trigger('change');
+                        }
+                    }
+                }, { situacaoDesejada: item.situacao || 'Apreendido' });
+
+                await page.waitForTimeout(400);
+
+                // b) Preenche o campo Placa e força a busca automática
+                const inputPlaca = page.locator('#modalMaterial input[name="placa"], input[name="placa"]').first();
+                await inputPlaca.waitFor({ state: 'visible', timeout: 5000 });
+                await inputPlaca.focus();
+                await inputPlaca.click();
+                await inputPlaca.fill('');
+                await inputPlaca.fill(item.placa);
+
+                await page.evaluate(({ val }) => {
+                    const input = document.querySelector('#modalMaterial input[name="placa"]');
+                    if (input) {
+                        input.value = val;
+                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                        input.dispatchEvent(new Event('change', { bubbles: true }));
+                        input.dispatchEvent(new Event('blur', { bubbles: true }));
+                        if (typeof $ !== 'undefined') $(input).trigger('blur').trigger('change');
+                    }
+                }, { val: item.placa });
+
+                console.log('Aguardando carregamento automático dos dados do veículo...');
+                await page.waitForTimeout(2500);
+            }
+
             // --- TRATAMENTO: DROGA ---
             if (item.tipoLabel.toLowerCase() === 'droga') {
                 console.log(`Sub-tipo detectado: "${item.subTipoDroga}" | Quantidade: ${item.quantidadeDroga}g`);
 
-                // Seleciona o sub-tipo exato da droga no dropdown
                 await page.evaluate(({ subTipoTexto }) => {
                     const selects = Array.from(document.querySelectorAll('#modalMaterial select'));
-                    // Busca o dropdown que contém as opções de sub-tipos de drogas
                     const selectSubtipo = selects.find(s => s.name !== 'material_tipo');
 
                     if (selectSubtipo) {
@@ -556,7 +605,6 @@ async function preencherModalMaterial(page, dadosMaterial) {
 
                 await page.waitForTimeout(400);
 
-                // Preenche a quantidade em gramas
                 const inputQuantidade = page.locator('#modalMaterial input[name="droga_quantidade"], input[name="droga_quantidade"]').first();
                 await inputQuantidade.waitFor({ state: 'visible', timeout: 5000 });
                 await inputQuantidade.focus();
@@ -591,7 +639,8 @@ async function preencherModalMaterial(page, dadosMaterial) {
 
             await page.waitForTimeout(400);
 
-            console.log('Confirmando gravação do Material...');
+            // 2. CLIQUE EM SALVAR MATERIAL (#btn-salvar-material)
+            console.log('Confirmando gravação do Material em #btn-salvar-material...');
             await page.evaluate(() => {
                 const btn = document.querySelector('#btn-salvar-material') || document.querySelector('#modalMaterial input[type="submit"]');
                 if (btn) btn.click();
@@ -613,8 +662,7 @@ async function preencherModalMaterial(page, dadosMaterial) {
 }
 
 /**
- * Preenche o modal de Composição garantindo a seleção sequencial:
- * Modal -> Tipo de Policiamento -> Função -> Matrícula -> Salvar
+ * Preenche o modal de Composição (Suporta Motorizado, Motopatrulhamento, etc.)
  */
 async function preencherModalComposicao(page, dadosComposicao) {
     try {
@@ -729,7 +777,7 @@ async function preencherModalComposicao(page, dadosComposicao) {
 /**
  * Executa o fluxo completo do Formulário 1 até a tela de Detalhes
  */
-async function executarOcorrenciaCompleta(page, dados) {
+async function executarOcorrenciaCompleta(page, dados, autoSalvarForm1) {
     console.log('\nNavegando para a tela de criação de ocorrência...');
     try {
         const btnCriarOcorrencia = page.locator('text="+ Criar corrência", text="+ Criar ocorrência", a:has-text("Criar")').first();
@@ -805,19 +853,7 @@ async function executarOcorrenciaCompleta(page, dados) {
         }
     }
 
-    // 5. NUMERAL DO ENDEREÇO
-    try {
-        const valorNumeral = (dados.numeral && String(dados.numeral).trim() !== '') ? String(dados.numeral) : 'S/N';
-        const inputNumeral = page.locator('input[placeholder*="Numeral"], input[name*="numeral"]').first();
-        if (await inputNumeral.isVisible({ timeout: 2000 }).catch(() => false)) {
-            await inputNumeral.fill(valorNumeral);
-            console.log(`✅ Numeral (${valorNumeral}) preenchido com sucesso!`);
-        }
-    } catch (e) {
-        console.warn('⚠️ Não foi possível preencher o Numeral, seguindo o fluxo...');
-    }
-
-    // 6. OPM QUE ATENDEU (ID direto: #select2-opm-container)
+    // 5. OPM QUE ATENDEU (ID direto: #select2-opm-container)
     if (dados.opmAtendeu) {
         console.log(`Preenchendo OPM de forma direta via #select2-opm-container: "${dados.opmAtendeu}"...`);
         try {
@@ -842,7 +878,7 @@ async function executarOcorrenciaCompleta(page, dados) {
         }
     }
 
-    // 7. NÚMERO DA OCORRÊNCIA (FICHA CIOPS)
+    // 6. NÚMERO DA OCORRÊNCIA (FICHA CIOPS)
     if (dados.numeroOcorrencia) {
         console.log(`Preenchendo Número da Ocorrência (Ficha CIOPS): ${dados.numeroOcorrencia}...`);
         try {
@@ -871,66 +907,72 @@ async function executarOcorrenciaCompleta(page, dados) {
 
     console.log('----------------------------------------------------');
     console.log('FORMULÁRIO 1 PREENCHIDO COM SUCESSO!');
-    console.log('Submetendo formulário via #btn-salvar-ocorrencia...');
     console.log('----------------------------------------------------');
 
-    // 8. SUBMISSÃO DO FORMULÁRIO 1
-    try {
-        await page.evaluate(() => {
-            const btn = document.querySelector('#btn-salvar-ocorrencia') ||
-                document.querySelector('input[value="Registrar Ocorrência"]') ||
-                document.querySelector('input[type="submit"]');
-            if (btn) btn.click();
-        });
-        console.log('✅ Botão "Registrar Ocorrência" clicado com sucesso!');
-    } catch (err) {
-        console.warn('⚠️ Falha ao clicar no botão de salvar ocorrência:', err.message);
-    }
-
-    // 9. AGUARDA REDIRECIONAMENTO E PREENCHE OS MODAIS
-    console.log('Aguardando redirecionamento para a tela de detalhes...');
-    let telaDetalhesDetectada = false;
-    let tentativas = 0;
-
-    while (!telaDetalhesDetectada && tentativas < 20) {
-        await page.waitForTimeout(1000);
-        tentativas++;
-
-        const urlAtual = page.url();
-        const estaNaTelaDetalhes = !urlAtual.endsWith('/ocorrencias-criar') && urlAtual.includes('/ocorrencias');
-        const botaoPessoaVisivel = await page.locator('button[data-target="#modalPessoa"]').isVisible().catch(() => false);
-
-        if (estaNaTelaDetalhes || botaoPessoaVisivel) {
-            telaDetalhesDetectada = true;
-        }
-    }
-
-    if (telaDetalhesDetectada) {
-        console.log('\n✅ Tela "Detalhando a ocorrência" detectada com sucesso!');
-        await page.waitForTimeout(1500);
-
-        // Executa o preenchimento dos modais sequencialmente
-        await executarFormulario2(page, dados);
-
-        if (dados.procedimento) {
-            await preencherModalProcedimento(page, dados.procedimento);
+    // 7. VERIFICA A DECISÃO TOMADA NO INÍCIO
+    if (autoSalvarForm1) {
+        console.log('Submetendo formulário via #btn-salvar-ocorrencia...');
+        try {
+            await page.evaluate(() => {
+                const btn = document.querySelector('#btn-salvar-ocorrencia') ||
+                    document.querySelector('input[value="Registrar Ocorrência"]') ||
+                    document.querySelector('input[type="submit"]');
+                if (btn) btn.click();
+            });
+            console.log('✅ Botão "Registrar Ocorrência" clicado com sucesso!');
+        } catch (err) {
+            console.warn('⚠️ Falha ao clicar no botão de salvar ocorrência:', err.message);
         }
 
-        if (dados.historico) {
-            await preencherModalHistorico(page, dados.historico);
+        console.log('Aguardando redirecionamento para a tela de detalhes...');
+        let telaDetalhesDetectada = false;
+        let tentativas = 0;
+
+        while (!telaDetalhesDetectada && tentativas < 20) {
+            await page.waitForTimeout(1000);
+            tentativas++;
+
+            const urlAtual = page.url();
+            const estaNaTelaDetalhes = !urlAtual.endsWith('/ocorrencias-criar') && urlAtual.includes('/ocorrencias');
+            const botaoPessoaVisivel = await page.locator('button[data-target="#modalPessoa"]').isVisible().catch(() => false);
+
+            if (estaNaTelaDetalhes || botaoPessoaVisivel) {
+                telaDetalhesDetectada = true;
+            }
         }
 
-        if (dados.material && dados.material.possuiMaterial) {
-            await preencherModalMaterial(page, dados.material);
-        }
+        if (telaDetalhesDetectada) {
+            console.log('\n✅ Tela "Detalhando a ocorrência" detectada com sucesso!');
+            await page.waitForTimeout(1500);
 
-        await preencherModalComposicao(page, dados.composicao);
+            await executarFormulario2(page, dados);
+
+            if (dados.procedimento) {
+                await preencherModalProcedimento(page, dados.procedimento);
+            }
+
+            if (dados.historico) {
+                await preencherModalHistorico(page, dados.historico);
+            }
+
+            if (dados.material && dados.material.possuiMaterial) {
+                await preencherModalMaterial(page, dados.material);
+            }
+
+            await preencherModalComposicao(page, dados.composicao);
+        } else {
+            console.warn('⚠️ O formulário pode não ter sido salvo. Verifique pendências de preenchimento na tela.');
+        }
     } else {
-        console.warn('⚠️ O formulário pode não ter sido salvo. Verifique pendências de preenchimento na tela.');
+        console.log('\n⏸️ Salvamento automático desativado conforme selecionado no início.');
+        console.log('Confira os dados na tela do navegador e clique em "Registrar Ocorrência" quando desejar.');
     }
 }
 
+// EXECUÇÃO PRINCIPAL
 (async () => {
+    const autoSalvarForm1 = await perguntarConfirmacao('\n🤖 Deseja que o robô REGISTRE o Formulário 1 automaticamente ao terminar?');
+
     const PASTA_PROJETO = __dirname;
     const userDataDir = path.join(PASTA_PROJETO, 'perfil-robo-chrome');
 
@@ -964,68 +1006,83 @@ async function executarOcorrenciaCompleta(page, dados) {
     while (continuarSistema) {
         let relatorioAtual = null;
 
+        // 1. Carrega/Seleciona o relatório antes de entrar no menu das ações
         try {
             relatorioAtual = await selecionarEObterTextoRelatorio();
         } catch (err) {
-            console.error('❌ Erro:', err.message);
+            console.error('❌ Erro ao carregar relatório:', err.message);
             break;
         }
 
-        const dados = extrairDadosFormulario1(relatorioAtual.conteudo);
+        let emExecucaoDoRelatorio = true;
 
-        console.log('\n====================================================');
-        console.log(`📄 RELATÓRIO CARREGADO: [ ${relatorioAtual.nome} ]`);
-        console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
-        console.log('1. Criar Ocorrência Completa (Formulário 1 -> Pessoas -> Procedimento -> Histórico -> Material -> Composição)');
-        console.log('2. Preencher apenas Pessoas na ocorrência atual');
-        console.log('3. Preencher apenas Procedimento na ocorrência atual');
-        console.log('4. Preencher apenas Histórico na ocorrência atual');
-        console.log('5. Preencher apenas Materiais na ocorrência atual');
-        console.log('6. Preencher apenas Composições na ocorrência atual');
-        console.log('7. FAZER TUDO AGORA (Executa Pessoas, Procedimento, Histórico, Material e Composição em sequência)');
-        console.log('8. Trocar de arquivo de Relatório');
-        console.log('9. Sair do Sistema');
-        console.log('====================================================');
+        // 2. Loop de operações sobre o relatório atualmente selecionado
+        while (emExecucaoDoRelatorio) {
+            const dados = extrairDadosFormulario1(relatorioAtual.conteudo);
 
-        const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
+            console.log('\n====================================================');
+            console.log(`📄 RELATÓRIO CARREGADO: [ ${relatorioAtual.nome} ]`);
+            console.log('ESCOLHA UMA OPÇÃO DE EXECUÇÃO:');
+            console.log('1. Criar Ocorrência Completa (Formulário 1 -> Pessoas -> Procedimento -> Histórico -> Material -> Composição)');
+            console.log('2. Preencher apenas Pessoas na ocorrência atual');
+            console.log('3. Preencher apenas Procedimento na ocorrência atual');
+            console.log('4. Preencher apenas Histórico na ocorrência atual');
+            console.log('5. Preencher apenas Materiais na ocorrência atual');
+            console.log('6. Preencher apenas Composições na ocorrência atual');
+            console.log('7. FAZER TUDO AGORA (Executa Pessoas, Procedimento, Histórico, Material e Composição em sequência)');
+            console.log('8. Trocar de arquivo de Relatório');
+            console.log('9. Sair do Sistema');
+            console.log('====================================================');
 
-        if (opcao.trim() === '1') {
-            await executarOcorrenciaCompleta(page, dados);
-        } else if (opcao.trim() === '2') {
-            await executarFormulario2(page, dados);
-        } else if (opcao.trim() === '3') {
-            await preencherModalProcedimento(page, dados.procedimento);
-        } else if (opcao.trim() === '4') {
-            await preencherModalHistorico(page, dados.historico);
-        } else if (opcao.trim() === '5') {
-            await preencherModalMaterial(page, dados.material);
-        } else if (opcao.trim() === '6') {
-            await preencherModalComposicao(page, dados.composicao);
-        } else if (opcao.trim() === '7') {
-            console.log('\n🚀 Iniciando execução sequencial de todas as etapas...');
-            await executarFormulario2(page, dados);
-            if (dados.procedimento) await preencherModalProcedimento(page, dados.procedimento);
-            if (dados.historico) await preencherModalHistorico(page, dados.historico);
-            if (dados.material && dados.material.possuiMaterial) await preencherModalMaterial(page, dados.material);
-            if (dados.composicao) await preencherModalComposicao(page, dados.composicao);
-            console.log('\n🎉 TODOS OS MODAIS FORAM PREENCHIDOS E FINALIZADOS COM SUCESSO!');
-        } else if (opcao.trim() === '8') {
-            console.log('\nRetornando para a seleção de relatório...');
-            continue;
-        } else if (opcao.trim() === '9' || opcao.trim().toLowerCase() === 'sair') {
-            continuarSistema = false;
-            console.log('Encerrando o robô...');
-            await context.close();
-            break;
-        }
+            const opcao = await aguardarComando('Digite o número da opção desejada e pressione ENTER: ');
 
-        console.log('\n====================================================');
-        const proximoComando = await aguardarComando('Deseja ler outro relatório agora? (S/N): ');
-        if (proximoComando.trim().toLowerCase() !== 's') {
-            continuarSistema = false;
-            console.log('Encerrando o robô...');
-            await context.close();
-            break;
+            if (opcao.trim() === '1') {
+                await executarOcorrenciaCompleta(page, dados, autoSalvarForm1);
+            } else if (opcao.trim() === '2') {
+                await executarFormulario2(page, dados);
+            } else if (opcao.trim() === '3') {
+                await preencherModalProcedimento(page, dados.procedimento);
+            } else if (opcao.trim() === '4') {
+                await preencherModalHistorico(page, dados.historico);
+            } else if (opcao.trim() === '5') {
+                await preencherModalMaterial(page, dados.material);
+            } else if (opcao.trim() === '6') {
+                await preencherModalComposicao(page, dados.composicao);
+            } else if (opcao.trim() === '7') {
+                console.log('\n🚀 Iniciando execução sequencial de todas as etapas...');
+                await executarFormulario2(page, dados);
+                if (dados.procedimento) await preencherModalProcedimento(page, dados.procedimento);
+                if (dados.historico) await preencherModalHistorico(page, dados.historico);
+                if (dados.material && dados.material.possuiMaterial) await preencherModalMaterial(page, dados.material);
+                if (dados.composicao) await preencherModalComposicao(page, dados.composicao);
+                console.log('\n🎉 TODOS OS MODAIS FORAM PREENCHIDOS E FINALIZADOS COM SUCESSO!');
+            } else if (opcao.trim() === '8') {
+                console.log('\nTroca de relatório solicitada...');
+                emExecucaoDoRelatorio = false; // Sai do sub-loop para escolher novo relatório no loop principal
+                continue;
+            } else if (opcao.trim() === '9' || opcao.trim().toLowerCase() === 'sair') {
+                emExecucaoDoRelatorio = false;
+                continuarSistema = false;
+                console.log('Encerrando o robô...');
+                await context.close();
+                break;
+            }
+
+            if (!continuarSistema) break;
+
+            console.log('\n====================================================');
+            const proximoComando = await aguardarComando('Deseja VOLTAR AO MENU PRINCIPAL com este relatório? (S/N): ');
+
+            if (proximoComando.trim().toLowerCase() === 's' || proximoComando.trim().toLowerCase() === 'sim') {
+                console.log('\nRetornando ao menu do relatório atual...');
+                // Permanece no sub-loop com o mesmo relatório
+            } else {
+                emExecucaoDoRelatorio = false;
+                continuarSistema = false;
+                console.log('Encerrando o robô...');
+                await context.close();
+                break;
+            }
         }
     }
 })();
