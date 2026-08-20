@@ -429,14 +429,13 @@ function extrairHistorico(textoLimpo) {
 }
 
 /**
- * Extrai a lista de materiais apreendidos (Drogas, Dinheiro e Veículos)
+ * Extrai a lista de materiais apreendidos (Armas, Veículos, Drogas e Dinheiro)
  */
 function extrairMaterial(textoLimpo) {
     const textoSanitizado = textoLimpo
         .replace(/[\u00A0\u1680\u180E\u2000-\u200B\u202F\u205F\u3000]/g, ' ')
         .replace(/\*/g, '');
 
-    // Captura o bloco da seção Material até a próxima seção
     const matchBloco = textoSanitizado.match(/Material\s*:?\s*([\s\S]*?)(?=\n\s*(?:Hist[óo]rico|Relato|Delegad[oa]|Qualifica[çc][ãa]o|Composi[çc][ãa]o|$))/i);
 
     if (!matchBloco) {
@@ -452,28 +451,78 @@ function extrairMaterial(textoLimpo) {
     const linhas = blocoMaterial.split('\n');
 
     for (let linha of linhas) {
-        const linhaLimpa = linha.trim();
-        if (!linhaLimpa) continue;
+        const linhaUpper = linha.trim().toUpperCase();
+        if (!linhaUpper) continue;
 
-        const linhaUpper = linhaLimpa.toUpperCase();
+        // --- 1. CAPTURA DE ARMA DE FOGO ---
+        if (/ARMA|PISTOLA|REV[ÓO]LVER|FUZIL|ESPINGARDA|RIFLE|CARABINA|SIMULACRO/i.test(linhaUpper)) {
+            // Identifica o Subtipo (Imagem 2)
+            let subTipoArma = 'Pistola';
+            if (/REV[ÓO]LVER/i.test(linhaUpper)) subTipoArma = 'Revolver';
+            else if (/FUZIL/i.test(linhaUpper)) subTipoArma = 'Fuzil';
+            else if (/ESPINGARDA/i.test(linhaUpper)) subTipoArma = 'Espingarda';
+            else if (/RIFLE/i.test(linhaUpper)) subTipoArma = 'Rifle';
+            else if (/CARABINA/i.test(linhaUpper)) subTipoArma = 'Carabina';
+            else if (/SIMULACRO/i.test(linhaUpper)) subTipoArma = 'Simulacro';
+            else if (/ARTESANAL/i.test(linhaUpper)) subTipoArma = 'Artesanal';
+            else if (/BRANCA/i.test(linhaUpper)) subTipoArma = 'Branca';
 
-        // 1. EXTRAÇÃO DE DROGA (Ex: "Droga: Cocaína (9g)" ou "Cocaína: 9g")
-        if (/DROGA|CRACK|COCA[IÍ]NA|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE/i.test(linhaUpper)) {
-            // Extrai a quantidade numérica (suporta gramas, g, gr, pedras, etc.)
+            // Identifica a Marca (Rossi, Taurus, Imbel, Glock, etc.)
+            let marca = 'Taurus';
+            if (/ROSSI/i.test(linhaUpper)) marca = 'Rossi';
+            else if (/GLOCK/i.test(linhaUpper)) marca = 'Glock';
+            else if (/IMBEL/i.test(linhaUpper)) marca = 'Imbel';
+
+            // Extrai o Calibre (Ex: .38, 38, 9mm, .40, 12, .380)
+            const matchCalibre = linhaUpper.match(/(?:\.?380|\.?38|\.?40|9MM|12|\.?357|5\.56|7\.62)/i);
+            const calibre = matchCalibre ? matchCalibre[0].replace('.', '') : '38';
+
+            // Extrai a Numeração da Arma
+            const matchNum = linhaUpper.match(/(?:N[º°S]|NUMERO|NR|SERIE)\s*:?\s*([A-Z0-9\.-]+)/i) ||
+                linhaUpper.match(/\b([A-Z]{1,3}\d{4,8}|\d{5,8})\b/i);
+            const numero = matchNum ? matchNum[1].replace(/[\.-]/g, '') : 'S/N';
+
+            // Extrai a Quantidade (padrão: 1)
+            const matchQtd = linhaUpper.match(/(\d+)\s*(?:ARMA|PISTOLA|REV[ÓO]LVER|UNIDADE|UN)/i);
+            const quantidade = matchQtd ? matchQtd[1] : '1';
+
+            listaMateriais.push({
+                tipoLabel: 'Arma',
+                subTipoArma: subTipoArma,
+                marca: marca,
+                calibre: calibre,
+                numero: numero,
+                quantidade: quantidade
+            });
+        }
+
+        // --- 2. CAPTURA DE VEÍCULOS ---
+        else if (/VE[IÍ]CULO|MOTO|MOTOCICLETA|CARRO|AUTOM[ÓO]VEL/i.test(linhaUpper)) {
+            const matchPlaca = linhaUpper.match(/[A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2}/i);
+            if (matchPlaca) {
+                const placaFormatada = matchPlaca[0].replace(/[-\s]/g, '').toUpperCase();
+                let situacao = 'Apreendido';
+                if (/RECUPERAD[OA]|ROUBAD[OA]|FURTAD[OA]/i.test(linhaUpper) || /RECUPERAD[OA]/i.test(textoSanitizado)) {
+                    situacao = 'Recuperado';
+                }
+                listaMateriais.push({
+                    tipoLabel: 'Veículo',
+                    placa: placaFormatada,
+                    situacao: situacao
+                });
+            }
+        }
+
+        // --- 3. CAPTURA DE DROGA ---
+        else if (/DROGA|CRACK|COCA[IÍ]NA|MACONHA|SKANK|SKUNK|HAXIXE|ENTORPECENTE/i.test(linhaUpper)) {
             const matchQtd = linhaUpper.match(/(\d+(?:[\.,]\d+)?)\s*(?:G|GRAMAS|GR|PINOS|PEDRAS|SACOS)?/i);
             const quantidade = matchQtd ? matchQtd[1].replace(',', '.') : '1';
+            let subTipoDroga = 'Maconha - gramas (g)';
 
-            let subTipoDroga = 'Maconha - gramas (g)'; // Padrão
-
-            if (/CRACK/i.test(linhaUpper)) {
-                subTipoDroga = 'Crack - gramas (g)';
-            } else if (/COCA[IÍ]NA|COCAINA/i.test(linhaUpper)) {
-                subTipoDroga = 'Cocaína - gramas (g)';
-            } else if (/SKANK|SKUNK/i.test(linhaUpper)) {
-                subTipoDroga = 'Skank - gramas (g)';
-            } else if (/HAXIXE/i.test(linhaUpper)) {
-                subTipoDroga = 'Haxixe - gramas (g)';
-            }
+            if (/CRACK/i.test(linhaUpper)) subTipoDroga = 'Crack - gramas (g)';
+            else if (/COCA[IÍ]NA|COCAINA/i.test(linhaUpper)) subTipoDroga = 'Cocaína - gramas (g)';
+            else if (/SKANK|SKUNK/i.test(linhaUpper)) subTipoDroga = 'Skank - gramas (g)';
+            else if (/HAXIXE/i.test(linhaUpper)) subTipoDroga = 'Haxixe - gramas (g)';
 
             listaMateriais.push({
                 tipoLabel: 'Droga',
@@ -482,55 +531,22 @@ function extrairMaterial(textoLimpo) {
             });
         }
 
-        // 2. EXTRAÇÃO DE DINHEIRO (Ex: "Dinheiro: R$ 103,00" ou "R$ 103,00")
+        // --- 4. CAPTURA DE DINHEIRO ---
         else if (/DINHEIRO|ESP[ÉE]CIE|CEDULA|NOTAS|R\$/i.test(linhaUpper)) {
             const matchVal = linhaUpper.match(/(?:R\$\s*)?(\d+(?:\.\d{3})*(?:,\d{2})?|\d+)/i);
             if (matchVal) {
                 let v = matchVal[1].replace(/\./g, '');
                 if (!v.includes(',')) v += ',00';
-
                 listaMateriais.push({
                     tipoLabel: 'Dinheiro',
                     valorDinheiro: v
                 });
             }
         }
-
-        // 3. EXTRAÇÃO DE VEÍCULO (Ex: "Veículo: Motocicleta... placa OHY6D19")
-        else if (/VE[IÍ]CULO|MOTO|MOTOCICLETA|CARRO|AUTOM[ÓO]VEL/i.test(linhaUpper)) {
-            const matchPlaca = linhaUpper.match(/[A-Z]{3}[-\s]?[0-9][A-Z0-9][0-9]{2}/i);
-
-            if (matchPlaca) {
-                const placaFormatada = matchPlaca[0].replace(/[-\s]/g, '').toUpperCase();
-
-                let situacao = 'Apreendido';
-                if (/RECUPERAD[OA]|ROUBAD[OA]|FURTAD[OA]/i.test(linhaUpper) || /RECUPERAD[OA]/i.test(textoSanitizado)) {
-                    situacao = 'Recuperado';
-                }
-
-                listaMateriais.push({
-                    tipoLabel: 'Veículo',
-                    placa: placaFormatada,
-                    situacao: situacao
-                });
-            }
-        }
-    }
-
-    // Fallback de segurança se não reconheceu padrões específicos
-    if (listaMateriais.length === 0) {
-        let tipoLabel = 'Outros';
-        const descUpper = blocoMaterial.toUpperCase();
-
-        if (/REV[ÓO]LVER|PISTOLA|ESPINGARDA|ARMA|RIFLE|FUZIL/i.test(descUpper)) tipoLabel = 'Arma';
-        else if (/MUNI[ÇC][ÃA]O|CARTUCHO|PROJ[ÉE]TIL/i.test(descUpper)) tipoLabel = 'Munição';
-        else if (/CELULAR|TELEFONE|SMARTPHONE|IPHONE/i.test(descUpper)) tipoLabel = 'Celular';
-
-        listaMateriais.push({ tipoLabel: tipoLabel });
     }
 
     return {
-        possuiMaterial: true,
+        possuiMaterial: listaMateriais.length > 0,
         lista: listaMateriais
     };
 }

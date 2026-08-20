@@ -582,6 +582,91 @@ async function preencherModalMaterial(page, dadosMaterial) {
                 await page.waitForTimeout(2500);
             }
 
+            // --- TRATAMENTO: ARMA DE FOGO ---
+            if (item.tipoLabel.toLowerCase() === 'arma' || item.tipoLabel.toLowerCase().includes('arma')) {
+                console.log(`Preenchendo Arma -> Tipo: "${item.subTipoArma}" | Marca: "${item.marca}" | Calibre: "${item.calibre}" | Nº: ${item.numero}`);
+
+                // a) Seleciona o Subtipo da Arma (select[name="arma_tipo"]) - Imagem 3
+                await page.evaluate(({ tipoDesejado }) => {
+                    const select = document.querySelector('#modalMaterial select[name="arma_tipo"]') ||
+                        document.querySelector('#modalMaterial select:has(option[value*="Pistola"])');
+                    if (select) {
+                        const normalizar = s => s ? s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() : '';
+                        const alvo = normalizar(tipoDesejado);
+                        const opt = Array.from(select.options).find(o => normalizar(o.text) === alvo || normalizar(o.value) === alvo) ||
+                            Array.from(select.options).find(o => normalizar(o.text).includes(alvo) || alvo.includes(normalizar(o.text)));
+                        if (opt) {
+                            select.value = opt.value;
+                            select.dispatchEvent(new Event('change', { bubbles: true }));
+                            select.dispatchEvent(new Event('input', { bubbles: true }));
+                            if (typeof $ !== 'undefined') $(select).trigger('change');
+                        }
+                    }
+                }, { tipoDesejado: item.subTipoArma });
+
+                await page.waitForTimeout(400);
+
+                // b) Seleciona a Marca via Select2 (#select2-arma_marca-*-container) - Imagem 4
+                try {
+                    const containerMarca = page.locator('#modalMaterial [id*="select2-arma_marca"]').first();
+                    await containerMarca.waitFor({ state: 'visible', timeout: 3000 });
+                    await containerMarca.click({ force: true });
+
+                    const searchInputMarca = page.locator('.select2-container--open input.select2-search__field').first();
+                    await searchInputMarca.fill(item.marca);
+                    await page.waitForTimeout(400);
+
+                    const opcaoMarca = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
+                    await opcaoMarca.waitFor({ state: 'visible', timeout: 3000 });
+                    await opcaoMarca.click();
+                } catch (e) {
+                    console.warn(`⚠️ Não foi possível selecionar a marca "${item.marca}" via Select2.`);
+                }
+
+                await page.waitForTimeout(400);
+
+                // c) Seleciona o Calibre via Select2 (#select2-arma_calibre-*-container) - Imagem 5
+                try {
+                    const containerCalibre = page.locator('#modalMaterial [id*="select2-arma_calibre"]').first();
+                    await containerCalibre.waitFor({ state: 'visible', timeout: 3000 });
+                    await containerCalibre.click({ force: true });
+
+                    const searchInputCalibre = page.locator('.select2-container--open input.select2-search__field').first();
+                    await searchInputCalibre.fill(item.calibre);
+                    await page.waitForTimeout(400);
+
+                    const opcaoCalibre = page.locator('.select2-results__option--highlighted, .select2-results__option').first();
+                    await opcaoCalibre.waitFor({ state: 'visible', timeout: 3000 });
+                    await opcaoCalibre.click();
+                } catch (e) {
+                    console.warn(`⚠️ Não foi possível selecionar o calibre "${item.calibre}" via Select2.`);
+                }
+
+                await page.waitForTimeout(400);
+
+                // d) Preenche o Número da Arma (input[name="arma_numero"]) - Imagem 6
+                const inputNumero = page.locator('#modalMaterial input[name="arma_numero"]').first();
+                if (await inputNumero.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await inputNumero.focus();
+                    await inputNumero.fill('');
+                    await inputNumero.fill(item.numero);
+                    await inputNumero.dispatchEvent('input');
+                    await inputNumero.dispatchEvent('change');
+                }
+
+                // e) Preenche a Quantidade (input[name="arma_quantidade"]) - Imagem 7
+                const inputQtd = page.locator('#modalMaterial input[name="arma_quantidade"]').first();
+                if (await inputQtd.isVisible({ timeout: 2000 }).catch(() => false)) {
+                    await inputQtd.focus();
+                    await inputQtd.fill('');
+                    await inputQtd.fill(item.quantidade.toString());
+                    await inputQtd.dispatchEvent('input');
+                    await inputQtd.dispatchEvent('change');
+                }
+
+                await page.waitForTimeout(400);
+            }
+
             // --- TRATAMENTO: DROGA ---
             if (item.tipoLabel.toLowerCase() === 'droga') {
                 console.log(`Sub-tipo detectado: "${item.subTipoDroga}" | Quantidade: ${item.quantidadeDroga}g`);
